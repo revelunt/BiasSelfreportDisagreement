@@ -9,30 +9,8 @@ options(scipen = 999)
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 setwd("..")
 
-## custom function
-cal.exposure.disagree <- function(net, canpref, prop = TRUE) {
-
-  out <- t(sapply(1:341, function(x) {
-    tempvec <- net[x, ]
-    exp.same <- canpref[x] == canpref
-    safe.disc <- sum(tempvec[exp.same])
-    dangerous.disc <- sum(tempvec[!exp.same])
-
-    if (isTRUE(prop)) {
-      safe.disc <- safe.disc/sum(tempvec)
-      dangerous.disc <- dangerous.disc/sum(tempvec)
-      if (is.nan(safe.disc)) safe.disc <- 0  ## no exposure
-      if (is.nan(dangerous.disc)) dangerous.disc <- 0 ## no exposure
-    }
-
-    ## output: two-column matrix of safe.disc & dangerous.disc
-    return(c(safe.disc = safe.disc, dangerous.disc = dangerous.disc))
-  }))
-
-  rownames(out) <- 1:341
-  return(out)
-}
-
+## load custom function
+source("dev/helper_functions.R")
 
 ## required packages
 require(haven)
@@ -122,18 +100,9 @@ datW1 <- exp.dis.daily[day <= 7, .(safe.disc = mean(safe.disc),
                                    dangerous.disc = mean(dangerous.disc)), by = id] %>%
   cbind(., exp.disagr.offline.prcpt = dat$pv323)
 
-datW1[, cor.test(dangerous.disc, exp.disagr.offline.prcpt)]
+datW1[, cor(dangerous.disc, exp.disagr.offline.prcpt)]
 
-# Pearson's product-moment correlation
-#
-# data:  dangerous.disc and exp.disagr.offline.prcpt
-# t = -0.88613, df = 339, p-value = 0.3762
-# alternative hypothesis: true correlation is not equal to 0
-# 95 percent confidence interval:
-#  -0.15349468  0.05843185
-# sample estimates:
-#         cor
-# -0.04807242
+
 
 ## during W2
 dat[, W2.disagree.for.liberal := rowMeans(.SD), .SDcols = c("kv61", "kv62")]
@@ -147,29 +116,92 @@ datW2 <- exp.dis.daily[(day <= 21 & day > 7), .(safe.disc = mean(safe.disc),
          cbind(., exp.disagr.offline.prcpt = dat$kv218) %>%
          cbind(., exp.disagr.online.prcpt = dat$W2.disagree.online.perception)
 
-datW2[, cor.test(dangerous.disc, exp.disagr.offline.prcpt)]
-# Pearson's product-moment correlation
-#
-# data:  dangerous.disc and exp.disagr.offline.prcpt
-# t = -0.88434, df = 339, p-value = 0.3771
-# alternative hypothesis: true correlation is not equal to 0
-# 95 percent confidence interval:
-#  -0.15339953  0.05852896
-# sample estimates:
-#        cor
-# -0.0479752
+datW2[, cor(dangerous.disc, exp.disagr.offline.prcpt)]
+bivariate.perm.test(datW2, "dangerous.disc", "exp.disagr.offline.prcpt", cor)
+#         obs  llci.0.025  ulci.0.975
+# -0.04797520 -0.09458145  0.10673502
 
-datW2[, cor.test(dangerous.disc, exp.disagr.online.prcpt)]
-# Pearson's product-moment correlation
-#
-# data:  dangerous.disc and exp.disagr.online.prcpt
-# t = 5.4778, df = 339, p-value = 0.00000008409
-# alternative hypothesis: true correlation is not equal to 0
-# 95 percent confidence interval:
-#  0.1845424 0.3798610
-# sample estimates:
-#       cor
-# 0.2851594
+datW2[, cor(dangerous.disc, exp.disagr.online.prcpt)]
+bivariate.perm.test(datW2, "dangerous.disc", "exp.disagr.online.prcpt", cor)
+#       obs llci.0.025 ulci.0.975
+# 0.2851594 -0.1049099  0.0980455
+
+## create differences between perception and behavioral measures
+## (+) values indicate the overestimation, and (-) means underestimation
+datW2[, diff.exp.disagree := exp.disagr.online.prcpt - dangerous.disc]
+datW2[, summary(diff.exp.disagree)]
+
+## permutation test indicates that the difference between
+## perception and objective behavior is significantly differ,
+## in a way that people tend to overestimate the exposure to differences
+diff.perm.test(datW2, "exp.disagr.online.prcpt", "dangerous.disc", rep = 5000)
+
+## add a series of correlates to data.frame
+  add.demographics(datW2)
+  ## candidate preference certainty
+  datW2[, pref.certainty := car::recode(dat$kv4, "8 = NA")] ## 1 = very weak, 7 = very strong
+  ## ideoloy and strength
+  datW2[, ideo := dat$kv49] ## 1 = extremely liberal, 7 = extremely conservative
+  datW2[, ideo_str := abs(dat$kv49 - 4)] ## 0 = weak, 3 = extremely strong
+  ## perceived distribution of majority vs. minority (based on candidate preference)
+  ## perceived prevalence of their in-party supporters vis-a-vis out-party supporters
+  ## (+) values means more perceived prevalence of in-party supporters
+  datW2[canpref == 1, perceived.opinion.climate := dat[canpref2 == 1, kv65 - kv64]]
+  datW2[canpref == 0, perceived.opinion.climate := dat[canpref2 == 0, kv64 - kv65]]
+  ## consistency motivation
+  datW2[, consistency.motivation := rowMeans(
+      dat[, .SD, .SDcols = c("pv18", "pv19", "pv20", "pv21", "pv23", "pv24")]
+    )]
+  ## understanding motivation
+  datW2[, understanding.motivation := rowMeans(
+      dat[, .SD, .SDcols = c("pv13", "pv14", "pv15", "pv16")]
+    )]
+  ## hedonic motivation
+  datW2[, hedonic.motivation := rowMeans(
+      dat[, .SD, .SDcols = c("pv27", "pv28", "pv29")]
+    )]
+  ## internal political efficacy
+  datW2[, internal.efficacy := rowMeans(
+      dat[, .SD, .SDcols = c("kv177", "kv178")]
+    )]
+  ## political interest
+  datW2[, pol.interest := rowMeans(
+    dat[, .SD, .SDcols = c("kv179", "kv180")]
+  )]
+  ## media exposure (in hours)
+    ## remove "NaN" in data -- W2
+    dat[is.na(kv194), kv194 := 0 ]
+    dat[is.na(kv196), kv196 := 0 ]
+    dat[is.na(kv200), kv200 := 0 ]
+    ## add with hours, and creaet index
+    datW2[, internet.news.use := dat[, (60*kv193 + kv194)/60]]
+    datW2[, newspaper.use := dat[, (60*kv195 + kv196)/60]]
+    datW2[, tv.news.use := dat[, (60*kv199 + kv200)/60]]
+  ## negativity.bias
+  dat[, kv93:kv97][, psych::alpha(as.data.frame(.SD), check.keys = T)]
+  datW2[, negativity.bias := rowMeans(
+          dat[, .SD, .SDcols = c("kv93", "kv94", "kv95", "kv96", "kv97")]
+        )]
+  ## in-group favoritism
+  dat[, kv160:kv164][, psych::alpha(as.data.frame(.SD), check.keys = T)]
+  datW2[, ingroup.favoritism := rowMeans(
+    dat[, .SD, .SDcols = c("kv160", "kv161", "kv162", "kv163", "kv164")]
+  )]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## during W3
 dat[, W3.disagree.for.liberal := rowMeans(.SD), .SDcols = c("hv116", "hv117")]
@@ -206,3 +238,9 @@ datW3[, cor.test(dangerous.disc, exp.disagr.online.prcpt)]
 # sample estimates:
 #       cor
 # 0.2971547
+
+## create differences between perception and behavioral measures
+## (+) values indicate the overestimation, and (-) means underestimation
+datW3[, diff.exp.disagree := exp.disagr.online.prcpt - dangerous.disc]
+datW3[, summary(diff.exp.disagree)]
+
