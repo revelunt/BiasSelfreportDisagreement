@@ -1,14 +1,18 @@
 
+## clear workspace before process the data
+options(scipen = 999)
+rm(list = ls())
+
 ## install required packages and dependencies automatically
 list.of.packages <- c("car", "psych","texreg","rstudioapi","data.table", "devtools",
-                      "haven", "magrittr", "igraph", "intergraph")
+                      "haven", "magrittr", "igraph", "intergraph", "ggplot2")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
-if(length(new.packages)) devtools::install(new.packages, dependencies = T)
-options(scipen = 999)
+if(length(new.packages)) devtools::install_cran(new.packages, dependencies = T)
+if(!("patchwork" %in% installed.packages()[,"Package"])) devtools::install_github("thomasp85/patchwork")
 
 ## automatically setting working directories
-setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
-setwd("..")
+# setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+# setwd("..")
 
 ## load custom function
 source("dev/helper_functions.R")
@@ -20,6 +24,8 @@ require(texreg)
 require(parallel)
 require(magrittr) ## pipe (%>%) operator
 require(igraph)
+require(ggplot2)
+require(patchwork)
 
 ## load data files locally (later to be deposited publicly)
 ## paths_to_file <- "/Users/songh95/Dropbox/(19) 2018 Summer/CR_2018/"
@@ -174,42 +180,57 @@ cleaned.data[, summary(diff.exp.disagree.W3)]
 ## in a way that people tend to overestimate the exposure to differences
 diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W3", "dangerous.disc.W3", rep = 10000)
 
-
-
 ## add a series of correlates to data.frame
   add.demographics(cleaned.data)
+
   ## a certainty of candidate preference (in terms of intended vote choice)
   ## 1 = very weak, 7 = very strong
+  cleaned.data[, pref.certainty.W2 := car::recode(dat$pv191, "8 = NA")]
   cleaned.data[, pref.certainty.W2 := car::recode(dat$kv4, "8 = NA")]
-  cleaned.data[, pref.certainty.W3 := car::recode(dat$pv191, "8 = NA")]
+  cleaned.data[, pref.certainty.W3 := dat$hv17]
+
   ## ideoloy and strength
-  cleaned.data[, ideo.W2 := dat$kv49] ## 1 = extremely liberal, 7 = extremely conservative
-  cleaned.data[, ideo_str.W2 := abs(dat$kv49 - 4)] ## 0 = weak, 3 = extremely strong
-  ## perceived distribution of majority vs. minority (based on candidate preference)
-  ## perceived prevalence of their in-party supporters vis-a-vis out-party supporters
+  ## ideo: 1 = extremely liberal, 7 = extremely conservative
+  ## ideo_str: 0 = weak, 3 = extremely strong
+  cleaned.data[, ideo.W1 := dat$pv258]
+  cleaned.data[, ideo.W2 := dat$kv49]
+  cleaned.data[, ideo.W3 := dat$hv104]
+  cleaned.data[, ideo_str.W1 := abs(dat$pv258 - 4)]
+  cleaned.data[, ideo_str.W2 := abs(dat$kv49 - 4)]
+  cleaned.data[, ideo_str.W3 := abs(dat$hv104 - 4)]
+
+  ## perceived opinion climate based on candidate preference
+  ## defined as perceived prevalence of their in-party supporters vis-a-vis out-party supporters
+  ## (excluding third-party candidates)
   ## (+) values means more perceived prevalence of in-party supporters
   cleaned.data[canpref.W2 == 1, perceived.opinion.climate.W2 := dat[canpref2 == 1, kv65 - kv64]]
   cleaned.data[canpref.W2 == 0, perceived.opinion.climate.W2 := dat[canpref2 == 0, kv64 - kv65]]
-  ## consistency motivation
+  cleaned.data[canpref.W3 == 1, perceived.opinion.climate.W3 := dat[canpref3 == 1, hv120 - hv119]]
+  cleaned.data[canpref.W3 == 0, perceived.opinion.climate.W3 := dat[canpref3 == 0, hv119 - hv120]]
+
+  ## discussion motivations (invariant across waves)
+    ## consistency motivation
   cleaned.data[, consistency.motivation := rowMeans(
-      dat[, .SD, .SDcols = c("pv18", "pv19", "pv20", "pv21", "pv23", "pv24")]
-    )]
-  ## understanding motivation
+      dat[, .SD, .SDcols = c("pv18", "pv19", "pv20", "pv21", "pv23", "pv24")] )]
+    ## understanding motivation
   cleaned.data[, understanding.motivation := rowMeans(
-      dat[, .SD, .SDcols = c("pv13", "pv14", "pv15", "pv16")]
-    )]
-  ## hedonic motivation
+      dat[, .SD, .SDcols = c("pv13", "pv14", "pv15", "pv16")] )]
+    ## hedonic motivation
   cleaned.data[, hedonic.motivation := rowMeans(
-      dat[, .SD, .SDcols = c("pv27", "pv28", "pv29")]
-    )]
-  ## internal political efficacy
-  cleaned.data[, internal.efficacy := rowMeans(
-      dat[, .SD, .SDcols = c("kv177", "kv178")]
-    )]
+      dat[, .SD, .SDcols = c("pv27", "pv28", "pv29")] )]
+
+  ## internal political efficacy (based on a 7-point scale)
+  ## higher value means higher political efficacy
+  cleaned.data[, internal.efficacy.W1 := 8 - rowMeans(dat[, .SD, .SDcols = c("pv163", "pv164")])]
+  cleaned.data[, internal.efficacy.W2 := 8 - rowMeans(dat[, .SD, .SDcols = c("kv177", "kv178")])]
+  dat[, .(hv232, hv233, hv235, hv237)][, psych::alpha(as.data.frame(.SD), check.keys = T)]
+  cleaned.data[, internal.efficacy.W3 := 8 - rowMeans(dat[, .SD, .SDcols = c("hv232","hv233","hv235","hv237")])]
+
   ## political interest
-  cleaned.data[, pol.interest := rowMeans(
-    dat[, .SD, .SDcols = c("kv179", "kv180")]
-  )]
+  cleaned.data[, pol.interest.W1 := rowMeans(dat[, .SD, .SDcols = c("pv165", "pv166")] )]
+  cleaned.data[, pol.interest.W2 := rowMeans(dat[, .SD, .SDcols = c("kv179", "kv180")] )]
+  cleaned.data[, pol.interest.W3 := rowMeans(dat[, .SD, .SDcols = c("hv238", "hv239")] )]
+
   ## media exposure (in hours)
     ## remove "NaN" in data -- W2
     dat[is.na(kv194), kv194 := 0 ]
@@ -219,58 +240,75 @@ diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W3", "dangerous.disc.W3", 
     cleaned.data[, internet.news.use.W2 := dat[, (60*kv193 + kv194)/60]]
     cleaned.data[, newspaper.use.W2 := dat[, (60*kv195 + kv196)/60]]
     cleaned.data[, tv.news.use.W2 := dat[, (60*kv199 + kv200)/60]]
+
   ## negativity.bias
   dat[, kv93:kv97][, psych::alpha(as.data.frame(.SD), check.keys = T)]
-  cleaned.data[, negativity.bias.W2 := rowMeans(
-          dat[, .SD, .SDcols = c("kv93", "kv94", "kv95", "kv96", "kv97")]
-        )]
+  cleaned.data[, outgroup.negativity.bias.W2 := rowMeans(
+    dat[, .SD, .SDcols = c("kv93", "kv94", "kv95", "kv96", "kv97")])]
   ## in-group favoritism
   dat[, kv160:kv164][, psych::alpha(as.data.frame(.SD), check.keys = T)]
-  cleaned.data[, ingroup.favoritism.W2 := rowMeans(
-    dat[, .SD, .SDcols = c("kv160", "kv161", "kv162", "kv163", "kv164")]
-  )]
+  cleaned.data[, ingroup.favoritism.bias.W2 := rowMeans(
+    dat[, .SD, .SDcols = c("kv160", "kv161", "kv162", "kv163", "kv164")])]
+
+
+## check the over-time change of key measurements
+  long.data <- melt(cleaned.data, id.vars = c("id", "age.years", "female", "edu",
+                                             "household.income", "residential.region",
+                                             "consistency.motivation", "understanding.motivation",
+                                             "hedonic.motivation", "internet.news.use.W2",
+                                             "newspaper.use.W2", "tv.news.use.W2",
+                                             "outgroup.negativity.bias.W2", "ingroup.favoritism.bias.W2"),
+                   measure = patterns("safe.disc.W[1-3]$",
+                                      "dangerous.disc.W[1-3]$",
+                                      "exp.disagr.offline.prcpt.W[1-3]$",
+                                      "diff.exp.disagree.W[2-3]$",
+                                      "canpref.W[1-3]$",
+                                      "pref.certainty.W[1-3]$",
+                                      "ideo.W[1-3]$",
+                                      "perceived.opinion.climate.W[2-3]$",
+                                      "internal.efficacy.W[1-3]$",
+                                      "pol.interest.W[1-3]$"),
+                   value.name = c("safe.disc", "dangerous.disc", "exp.disagr.offline.prcpt",
+                                  "diff.exp.disagree", "canpref", "pref.certainty",
+                                  "ideo", "perceived.opinion.climate", "internal.efficacy", "pol.interest"),
+                   variable.name = "Wave", variable.factor = T)
+
+  ## manually correct some misassignment of variable waves
+  long.data[Wave == 3, diff.exp.disagree := long.data[Wave == 2, diff.exp.disagree]]
+  long.data[Wave == 2, diff.exp.disagree := long.data[Wave == 1, diff.exp.disagree]]
+  long.data[Wave == 1, diff.exp.disagree := NA]
+  long.data[Wave == 3, perceived.opinion.climate := long.data[Wave == 2, perceived.opinion.climate]]
+  long.data[Wave == 2, perceived.opinion.climate := long.data[Wave == 1, perceived.opinion.climate]]
+  long.data[Wave == 1, perceived.opinion.climate := NA]
+
+  ## self-reported exposure to disagreement measure (exp.disagr.offline.prcpt)
+  ggplot(long.data, aes(x = Wave, y = exp.disagr.offline.prcpt, group = factor(id))) +
+    stat_summary(aes(group = 1), geom = "point", fun.y = mean, shape = 17, size = 3) +
+    stat_smooth(aes(group = 1), method = "lm", color = "red", se = T) +
+    ggtitle("Dangerous discussion (proportion)")
+
+  ## safe and dangerous discussion
+  p1 <- ggplot(long.data, aes(x = Wave, y = safe.disc, group = factor(id))) +
+    stat_summary(aes(group = 1), geom = "point", fun.y = mean, shape = 17, size = 3) +
+    stat_smooth(aes(group = 1), method = "lm", color = "red", se = T) +
+    ggtitle("Safe discussion (proportion)")
+
+  p2 <- ggplot(long.data, aes(x = Wave, y = dangerous.disc, group = factor(id))) +
+    stat_summary(aes(group = 1), geom = "point", fun.y = mean, shape = 17, size = 3) +
+    stat_smooth(aes(group = 1), method = "lm", color = "red", se = T) +
+    ggtitle("Dangerous discussion (proportion)")
+
+  p1 + p2 + plot_layout(nrow = 1)
+
+  ## perceived opinion climate
+  ggplot(long.data[Wave %in% c(1,2),], aes(x = Wave, y = perceived.opinion.climate, group = factor(id))) +
+    stat_summary(aes(group = 1), geom = "point", fun.y = mean, shape = 17, size = 3) +
+    stat_smooth(aes(group = 1), method = "lm", color = "red", se = T) +
+    ggtitle("Perceived opinion climate") + labs(caption = "(higher value means more in-group prevalence)") +
+    scale_x_discrete(labels=c("1" = "Wave 2", "2" = "Wave 3"))
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-# Pearson's product-moment correlation
-#
-# data:  dangerous.disc and exp.disagr.offline.prcpt
-# t = 0.61368, df = 339, p-value = 0.5398
-# alternative hypothesis: true correlation is not equal to 0
-# 95 percent confidence interval:
-#  -0.07315257  0.13902625
-# sample estimates:
-#        cor
-# 0.03331218
-
-datW3[, cor.test(dangerous.disc, exp.disagr.online.prcpt)]
-# Pearson's product-moment correlation
-#
-# data:  dangerous.disc and exp.disagr.online.prcpt
-# t = 5.73, df = 339, p-value = 0.00000002219
-# alternative hypothesis: true correlation is not equal to 0
-# 95 percent confidence interval:
-#  0.1971715 0.3910202
-# sample estimates:
-#       cor
-# 0.2971547
-
-## create differences between perception and behavioral measures
-## (+) values indicate the overestimation, and (-) means underestimation
-datW3[, diff.exp.disagree := exp.disagr.online.prcpt - dangerous.disc]
-datW3[, summary(diff.exp.disagree)]
 

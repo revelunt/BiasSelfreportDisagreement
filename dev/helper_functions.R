@@ -3,6 +3,9 @@
 ## Helper functions #
 ## ---------------- #
 
+## ---------------------- ##
+## 1. Data prep functions ##
+## ---------------------- ##
 
 ## function to calculate exposure to disagreement
 ## based on ego's and alters' candidate preferences
@@ -115,4 +118,109 @@ add.demographics <- function(data.to.process) {
 
   ## return data.copy
   data.copy
+}
+
+
+
+
+
+
+## --------------------- ##
+## 2. Analysis functions ##
+## --------------------- ##
+
+estimate.unconditional.indirect <- function(dat, i) {
+  ## i is the index value for resample
+  resample <- dat[i,]
+  model.M.resample <- lm(formula(model.M), data = resample)
+  model.Y.resample <- lm(formula(model.Y), data = resample)
+
+  a1 <- summary(model.M.resample)$coef['safe.disc.W1',1]
+  a2 <- summary(model.M.resample)$coef['dangerous.disc.W1',1]
+
+  b1 <- summary(model.Y.resample)$coef['perceived.opinion.climate.W2',1]
+  c1 <- summary(model.Y.resample)$coef['safe.disc.W1',1]
+  c2 <- summary(model.Y.resample)$coef['dangerous.disc.W1',1]
+
+  ## effect decomposition ##
+  ## unconditional indirect effect
+  ## safe.exposure -> opinion climate -> self-reported exposure to disagree
+  ind.safe.opi.climate <- a1*b1
+  ## dangerous.exposure -> opinion climate -> self-reported exposure to disagree
+  ind.dangerous.exposure.opi.climate <- a2*b1
+
+  return.vec <-
+    ## unconditional indirect effect
+    c(ind.safe.opi.climate = ind.safe.opi.climate,
+      ind.dangerous.exposure.opi.climate = ind.dangerous.exposure.opi.climate,
+      direct.safe = c1,
+      direct.dangerous = c2)
+
+  # return indirect effects
+  return(return.vec)
+}
+
+estimate.conditional.indirect <- function(dat, i) {
+  ## i is the index value for resample
+  resample <- dat[i,]
+  model.M2.resample <- lm(formula(model.M2), data = resample)
+  model.Y.resample <- lm(formula(model.Y), data = resample)
+
+  a1 <- summary(model.M2.resample)$coef['safe.disc.W1',1]
+  a2_1 <- summary(model.M2.resample)$coef['dangerous.disc.W1',1]
+  # a2_2 <- summary(model.M2.resample)$coef['ideo_str.W2',1]
+  a2_3 <- summary(model.M2.resample)$coef['dangerous.disc.W1:ideo_str.W2',1]
+
+  b1 <- summary(model.Y.resample)$coef['perceived.opinion.climate.W2',1]
+  c1 <- summary(model.Y.resample)$coef['safe.disc.W1',1]
+  c2 <- summary(model.Y.resample)$coef['dangerous.disc.W1',1]
+
+  ## effect decomposition ##
+  ## safe.exposure -> opinion climate -> self-reported exposure to disagree
+  ind.safe.opi.climate <- a1*b1
+  ## index of moderated mediation
+  ## dangerous.exposure -> opinion climate -> self-reported exposure to disagree
+  ## moderated by ideo_strength
+  indexModMed <- a2_3*b1
+  ## conditional indirect effects at every values of ideo_strength
+  cond.ind <- (a2_1 + c(0:3)*a2_3)*b1
+
+  return.vec <-
+    ## unconditional indirect effect
+    c(ind.safe.opi.climate = ind.safe.opi.climate,
+      indexModMed = indexModMed,
+      cond.ind = cond.ind,
+      direct.safe = c1,
+      direct.dangerous = c2)
+
+  # return indirect effects
+  return(return.vec)
+}
+
+
+## function to extract point estimates and 95% CIs from boot object
+## and convert to data.frame object
+
+get.boot.stats <- function(boot.out, type = "bca", ...) {
+  ## identify dimension of the data
+  n.now <- length(boot.out$t0)
+  ## get CIs (default by bca, )
+  require(parallel)
+  temp <- mclapply(1:n.now, function(i) {
+    if (type == "perc") {
+      cis <- boot.ci(boot.out, index = i, type = type, ...)
+      cis[['percent']][4:5]
+    } else {
+      cis <- boot.ci(boot.out, index = i, type = type, ...)
+      cis[[type]][4:5]
+    }
+  }, mc.cores = parallel::detectCores())
+
+  ## collect stats and rename row/columns
+  dat.out <- cbind(boot.out$t0, do.call("rbind", temp))
+  dat.out <- as.data.frame(dat.out)
+  rownames(dat.out) <- names(boot.out$t0)
+  colnames(dat.out) <- c("coef", "llci", "ulci")
+
+  dat.out
 }
