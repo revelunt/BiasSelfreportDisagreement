@@ -132,7 +132,7 @@ add.demographics <- function(data.to.process) {
 estimate.unconditional.indirect <- function(dat, i) {
   ## i is the index value for resample
   resample <- dat[i,]
-  model.M.resample <- lm(formula(model.M), data = resample)
+  model.M.resample <- lm(formula(model.M1), data = resample)
   model.Y.resample <- lm(formula(model.Y), data = resample)
 
   a1 <- summary(model.M.resample)$coef['safe.disc.W1',1]
@@ -159,6 +159,9 @@ estimate.unconditional.indirect <- function(dat, i) {
   # return indirect effects
   return(return.vec)
 }
+
+#### TO BE CONTINUTED -- revise based on moderated moderated mediation
+#### ADD index of moderated moderated mediation
 
 estimate.conditional.indirect <- function(dat, i) {
   ## i is the index value for resample

@@ -5,7 +5,7 @@ rm(list = ls())
 
 ## install required packages and dependencies automatically
 list.of.packages <- c("car", "psych","texreg","rstudioapi","data.table", "devtools",
-                      "haven", "magrittr", "igraph", "intergraph", "ggplot2")
+                      "haven", "magrittr", "igraph", "intergraph", "ggplot2", "jtools")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) devtools::install_cran(new.packages, dependencies = T)
 if(!("patchwork" %in% installed.packages()[,"Package"])) devtools::install_github("thomasp85/patchwork")
@@ -74,7 +74,6 @@ for (i in 1:length(date.range)) {
   g[[i]] <- igraph::graph.edgelist(g[[i]], directed = TRUE)
   g[[i]] <- igraph::get.adjacency(g[[i]], sparse = T)
 }
-
 
 ## exposure to disagreement (reading others' posts)
 ## in wave 1, there are few Rs who did not indicated their initial candidate pref.
@@ -180,6 +179,29 @@ cleaned.data[, summary(diff.exp.disagree.W3)]
 ## in a way that people tend to overestimate the exposure to differences
 diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W3", "dangerous.disc.W3", rep = 10000)
 
+
+## eigenvector centrality
+daily.centrality <- lapply(seq_len(length(date.range)), function(i) {
+  centr.clo <- g[[i]] %>%
+    igraph::graph_from_adjacency_matrix(., mode = "directed", weighted = TRUE) %>%
+    igraph::centr_eigen(., directed = T)
+  centr.eigen <- centr.clo$vector
+  centr.eigen <- scale(centr.eigen)[,1]
+  centr.eigen <- cbind(id = 1:341, centr.eigen = centr.eigen, day = i)
+  centr.eigen
+})
+
+daily.centrality <- setDT(as.data.frame(do.call(rbind, daily.centrality)))
+
+cleaned.data[, centr.eigen.W1 :=
+               daily.centrality[day %in% c(1:7),
+               .(centr.eigen = mean(centr.eigen)), by = id][, centr.eigen]]
+cleaned.data[, centr.eigen.W2 := daily.centrality[day %in% c(8:20),
+               .(centr.eigen = mean(centr.eigen)), by = id][, centr.eigen]]
+cleaned.data[, centr.eigen.W3 := daily.centrality[day %in% c(21:27),
+               .(centr.eigen = mean(centr.eigen)), by = id][, centr.eigen]]
+
+
 ## add a series of correlates to data.frame
   add.demographics(cleaned.data)
 
@@ -249,7 +271,8 @@ diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W3", "dangerous.disc.W3", 
   dat[, kv160:kv164][, psych::alpha(as.data.frame(.SD), check.keys = T)]
   cleaned.data[, ingroup.favoritism.bias.W2 := rowMeans(
     dat[, .SD, .SDcols = c("kv160", "kv161", "kv162", "kv163", "kv164")])]
-
+  ## affective polarization (ingroup - outgroup)
+  cleaned.data[, affective.polarization := ingroup.favoritism.bias.W2 - outgroup.negativity.bias.W2]
 
 ## check the over-time change of key measurements
   long.data <- melt(cleaned.data, id.vars = c("id", "age.years", "female", "edu",
