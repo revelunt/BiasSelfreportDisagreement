@@ -22,8 +22,8 @@ require(magrittr) ## pipe (%>%) operator
 require(igraph)
 
 ## load data files locally (later to be deposited publicly)
-paths_to_file <- "/Users/songh95/Dropbox/(19) 2018 Summer/CR_2018/"
-dat <- haven::read_sav(paste0(paths_to_file, "Dat/DiscussionForumThreeWavePanel(N=341).sav"))
+## paths_to_file <- "/Users/songh95/Dropbox/(19) 2018 Summer/CR_2018/"
+dat <- haven::read_sav("Dat/DiscussionForumThreeWavePanel(N=341).sav")
 setDT(dat)
 ## total sample (341)
 dat[, .N]
@@ -47,8 +47,8 @@ dat[, .(kv62 - kv58, kv49)] %>% table
 
 
 ## reading log data
-net <- read.csv(paste0(paths_to_file, "Dat/Reading_1113-1126_Participants(N=341)_Count(N=160836).csv"))
-net2 <- read.csv(paste0(paths_to_file, "Dat/Reading_1127-1219_Participants(N=341)_Count(N=160836).csv"))
+net <- read.csv("Dat/Reading_1113-1126_Participants(N=341)_Count(N=160836).csv")
+net2 <- read.csv("Dat/Reading_1127-1219_Participants(N=341)_Count(N=160836).csv")
 net2 <- data.frame(reading.time = net2$Reading.Time, reader.id = net2$Reader.Id, poster.id = net2$Poster.Id)
 net <- rbind(net, net2)
 setDT(net)
