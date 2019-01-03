@@ -1,8 +1,9 @@
 
-list.of.packages <- c("car", "psych","texreg","rstudioapi","data.table",
+## install required packages and dependencies automatically
+list.of.packages <- c("car", "psych","texreg","rstudioapi","data.table", "devtools",
                       "haven", "magrittr", "igraph", "intergraph")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
-if(length(new.packages)) install.packages(new.packages, dependencies = T)
+if(length(new.packages)) devtools::install(new.packages, dependencies = T)
 options(scipen = 999)
 
 ## automatically setting working directories
@@ -12,7 +13,7 @@ setwd("..")
 ## load custom function
 source("dev/helper_functions.R")
 
-## required packages
+## load required packages
 require(haven)
 require(data.table)
 require(texreg)
@@ -20,7 +21,7 @@ require(parallel)
 require(magrittr) ## pipe (%>%) operator
 require(igraph)
 
-## load data
+## load data files locally (later to be deposited publicly)
 paths_to_file <- "/Users/songh95/Dropbox/(19) 2018 Summer/CR_2018/"
 dat <- haven::read_sav(paste0(paths_to_file, "Dat/DiscussionForumThreeWavePanel(N=341).sav"))
 setDT(dat)
@@ -96,11 +97,11 @@ exp.dis.daily <- lapply(seq_len(length(date.range)), function(i) {
 exp.dis.daily <- setDT(as.data.frame(do.call(rbind, exp.dis.daily)))
 
 ## until W1
-datW1 <- exp.dis.daily[day <= 7, .(safe.disc = mean(safe.disc),
-                                   dangerous.disc = mean(dangerous.disc)), by = id] %>%
-  cbind(., exp.disagr.offline.prcpt = dat$pv323)
+cleaned.data <- exp.dis.daily[day <= 7, .(safe.disc.W1 = mean(safe.disc),
+                                   dangerous.disc.W1 = mean(dangerous.disc)), by = id] %>%
+  cbind(., exp.disagr.offline.prcpt.W1 = dat$pv323)
 
-datW1[, cor(dangerous.disc, exp.disagr.offline.prcpt)]
+cleaned.data[, cor(dangerous.disc.W1, exp.disagr.offline.prcpt.W1)]
 
 
 
@@ -111,61 +112,102 @@ dat[, W2.disagree.for.conservative := rowMeans(.SD), .SDcols = c("kv60", "kv61")
 dat[canpref2 == 1, W2.disagree.online.perception := W2.disagree.for.liberal]
 dat[canpref2 == 0, W2.disagree.online.perception := W2.disagree.for.conservative]
 
-datW2 <- exp.dis.daily[(day <= 21 & day > 7), .(safe.disc = mean(safe.disc),
-                          dangerous.disc = mean(dangerous.disc)), by = id] %>%
-         cbind(., exp.disagr.offline.prcpt = dat$kv218) %>%
-         cbind(., exp.disagr.online.prcpt = dat$W2.disagree.online.perception)
+cleaned.data <- cleaned.data %>% merge(.,
+                exp.dis.daily[(day <= 21 & day > 7),
+                              .(safe.disc.W2 = mean(safe.disc),
+                                dangerous.disc.W2 = mean(dangerous.disc)), by = id] %>%
+                 cbind(., exp.disagr.offline.prcpt.W2 = dat$kv218) %>%
+                 cbind(., exp.disagr.online.prcpt.W2 = dat$W2.disagree.online.perception),
+                 by = "id")
 
-datW2[, cor(dangerous.disc, exp.disagr.offline.prcpt)]
-bivariate.perm.test(datW2, "dangerous.disc", "exp.disagr.offline.prcpt", cor)
+cleaned.data[, cor(dangerous.disc.W2, exp.disagr.offline.prcpt.W2)]
+bivariate.perm.test(cleaned.data, "dangerous.disc.W2", "exp.disagr.offline.prcpt.W2", cor)
 #         obs  llci.0.025  ulci.0.975
 # -0.04797520 -0.09458145  0.10673502
 
-datW2[, cor(dangerous.disc, exp.disagr.online.prcpt)]
-bivariate.perm.test(datW2, "dangerous.disc", "exp.disagr.online.prcpt", cor)
+cleaned.data[, cor(dangerous.disc.W2, exp.disagr.online.prcpt.W2)]
+bivariate.perm.test(cleaned.data, "dangerous.disc.W2", "exp.disagr.online.prcpt.W2", cor)
 #       obs llci.0.025 ulci.0.975
 # 0.2851594 -0.1049099  0.0980455
 
 ## create differences between perception and behavioral measures
 ## (+) values indicate the overestimation, and (-) means underestimation
-datW2[, diff.exp.disagree := exp.disagr.online.prcpt - dangerous.disc]
-datW2[, summary(diff.exp.disagree)]
+cleaned.data[, diff.exp.disagree.W2 := exp.disagr.online.prcpt.W2 - dangerous.disc.W2]
+cleaned.data[, summary(diff.exp.disagree.W2)]
 
 ## permutation test indicates that the difference between
 ## perception and objective behavior is significantly differ,
 ## in a way that people tend to overestimate the exposure to differences
-diff.perm.test(datW2, "exp.disagr.online.prcpt", "dangerous.disc", rep = 5000)
+diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W2", "dangerous.disc.W2", rep = 10000)
+
+## during W3
+dat[, W3.disagree.for.liberal := rowMeans(.SD), .SDcols = c("hv116", "hv117")]
+dat[, W3.disagree.for.conservative := rowMeans(.SD), .SDcols = c("hv115", "hv116")]
+
+dat[canpref3 == 1, W3.disagree.online.perception := W3.disagree.for.liberal]
+dat[canpref3 == 0, W3.disagree.online.perception := W3.disagree.for.conservative]
+
+cleaned.data <- cleaned.data %>% merge(.,
+                exp.dis.daily[day > 21, .(safe.disc.W3 = mean(safe.disc),
+                                   dangerous.disc.W3 = mean(dangerous.disc)), by = id] %>%
+                cbind(., exp.disagr.offline.prcpt.W3 = dat$hv277) %>%
+                cbind(., exp.disagr.online.prcpt.W3 = dat$W3.disagree.online.perception),
+                by = "id")
+
+cleaned.data[, cor(dangerous.disc.W3, exp.disagr.offline.prcpt.W3)]
+bivariate.perm.test(cleaned.data, "dangerous.disc.W3", "exp.disagr.offline.prcpt.W3", cor)
+#        obs  llci.0.025  ulci.0.975
+# 0.03331218 -0.10793688  0.10286882
+
+cleaned.data[, cor(dangerous.disc.W3, exp.disagr.online.prcpt.W3)]
+bivariate.perm.test(cleaned.data, "dangerous.disc.W3", "exp.disagr.online.prcpt.W3", cor)
+#       obs llci.0.025 ulci.0.975
+# 0.2971547 -0.1130125  0.1110424
+
+## create differences between perception and behavioral measures
+## (+) values indicate the overestimation, and (-) means underestimation
+cleaned.data[, diff.exp.disagree.W3 := exp.disagr.online.prcpt.W3 - dangerous.disc.W3]
+cleaned.data[, summary(diff.exp.disagree.W3)]
+
+## permutation test indicates that the difference between
+## perception and objective behavior is significantly differ,
+## in a way that people tend to overestimate the exposure to differences
+diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W3", "dangerous.disc.W3", rep = 10000)
+
+
 
 ## add a series of correlates to data.frame
-  add.demographics(datW2)
-  ## candidate preference certainty
-  datW2[, pref.certainty := car::recode(dat$kv4, "8 = NA")] ## 1 = very weak, 7 = very strong
+  add.demographics(cleaned.data)
+  ## a certainty of candidate preference (in terms of intended vote choice)
+  ## 1 = very weak, 7 = very strong
+  cleaned.data[, pref.certainty.W2 := car::recode(dat$kv4, "8 = NA")]
+  cleaned.data[, pref.certainty.W3 := car::recode(dat$pv191, "8 = NA")]
   ## ideoloy and strength
-  datW2[, ideo := dat$kv49] ## 1 = extremely liberal, 7 = extremely conservative
-  datW2[, ideo_str := abs(dat$kv49 - 4)] ## 0 = weak, 3 = extremely strong
+  cleaned.data[, ideo.W2 := dat$kv49] ## 1 = extremely liberal, 7 = extremely conservative
+  cleaned.data[, ideo_str.W2 := abs(dat$kv49 - 4)] ## 0 = weak, 3 = extremely strong
   ## perceived distribution of majority vs. minority (based on candidate preference)
   ## perceived prevalence of their in-party supporters vis-a-vis out-party supporters
   ## (+) values means more perceived prevalence of in-party supporters
-  datW2[canpref == 1, perceived.opinion.climate := dat[canpref2 == 1, kv65 - kv64]]
-  datW2[canpref == 0, perceived.opinion.climate := dat[canpref2 == 0, kv64 - kv65]]
+  cleaned.data[canpref.W2 == 1, perceived.opinion.climate.W2 := dat[canpref2 == 1, kv65 - kv64]]
+  cleaned.data[canpref.W2 == 0, perceived.opinion.climate.W2 := dat[canpref2 == 0, kv64 - kv65]]
   ## consistency motivation
-  datW2[, consistency.motivation := rowMeans(
+  cleaned.data[, consistency.motivation := rowMeans(
       dat[, .SD, .SDcols = c("pv18", "pv19", "pv20", "pv21", "pv23", "pv24")]
     )]
   ## understanding motivation
-  datW2[, understanding.motivation := rowMeans(
+  cleaned.data[, understanding.motivation := rowMeans(
       dat[, .SD, .SDcols = c("pv13", "pv14", "pv15", "pv16")]
     )]
   ## hedonic motivation
-  datW2[, hedonic.motivation := rowMeans(
+  cleaned.data[, hedonic.motivation := rowMeans(
       dat[, .SD, .SDcols = c("pv27", "pv28", "pv29")]
     )]
   ## internal political efficacy
-  datW2[, internal.efficacy := rowMeans(
+  cleaned.data[, internal.efficacy := rowMeans(
       dat[, .SD, .SDcols = c("kv177", "kv178")]
     )]
   ## political interest
-  datW2[, pol.interest := rowMeans(
+  cleaned.data[, pol.interest := rowMeans(
     dat[, .SD, .SDcols = c("kv179", "kv180")]
   )]
   ## media exposure (in hours)
@@ -174,17 +216,17 @@ diff.perm.test(datW2, "exp.disagr.online.prcpt", "dangerous.disc", rep = 5000)
     dat[is.na(kv196), kv196 := 0 ]
     dat[is.na(kv200), kv200 := 0 ]
     ## add with hours, and creaet index
-    datW2[, internet.news.use := dat[, (60*kv193 + kv194)/60]]
-    datW2[, newspaper.use := dat[, (60*kv195 + kv196)/60]]
-    datW2[, tv.news.use := dat[, (60*kv199 + kv200)/60]]
+    cleaned.data[, internet.news.use.W2 := dat[, (60*kv193 + kv194)/60]]
+    cleaned.data[, newspaper.use.W2 := dat[, (60*kv195 + kv196)/60]]
+    cleaned.data[, tv.news.use.W2 := dat[, (60*kv199 + kv200)/60]]
   ## negativity.bias
   dat[, kv93:kv97][, psych::alpha(as.data.frame(.SD), check.keys = T)]
-  datW2[, negativity.bias := rowMeans(
+  cleaned.data[, negativity.bias.W2 := rowMeans(
           dat[, .SD, .SDcols = c("kv93", "kv94", "kv95", "kv96", "kv97")]
         )]
   ## in-group favoritism
   dat[, kv160:kv164][, psych::alpha(as.data.frame(.SD), check.keys = T)]
-  datW2[, ingroup.favoritism := rowMeans(
+  cleaned.data[, ingroup.favoritism.W2 := rowMeans(
     dat[, .SD, .SDcols = c("kv160", "kv161", "kv162", "kv163", "kv164")]
   )]
 
@@ -203,19 +245,7 @@ diff.perm.test(datW2, "exp.disagr.online.prcpt", "dangerous.disc", rep = 5000)
 
 
 
-## during W3
-dat[, W3.disagree.for.liberal := rowMeans(.SD), .SDcols = c("hv116", "hv117")]
-dat[, W3.disagree.for.conservative := rowMeans(.SD), .SDcols = c("hv115", "hv116")]
 
-dat[canpref3 == 1, W3.disagree.online.perception := W3.disagree.for.liberal]
-dat[canpref3 == 0, W3.disagree.online.perception := W3.disagree.for.conservative]
-
-datW3 <- exp.dis.daily[day > 21, .(safe.disc = mean(safe.disc),
-                          dangerous.disc = mean(dangerous.disc)), by = id] %>%
-         cbind(., exp.disagr.offline.prcpt = dat$hv277) %>%
-         cbind(., exp.disagr.online.prcpt = dat$W3.disagree.online.perception)
-
-datW3[, cor.test(dangerous.disc, exp.disagr.offline.prcpt)]
 # Pearson's product-moment correlation
 #
 # data:  dangerous.disc and exp.disagr.offline.prcpt

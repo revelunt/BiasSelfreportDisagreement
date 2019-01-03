@@ -98,7 +98,9 @@ add.demographics <- function(data.to.process) {
 
   data.copy <- data.to.process
   ## candidate preference (0 = conservative, 1 = liberal)
-  data.copy[, canpref := dat[, canpref2]]
+  data.copy[, canpref.W1 := dat[, canpref1.imputed]]
+  data.copy[, canpref.W2 := dat[, canpref2]]
+  data.copy[, canpref.W3 := dat[, canpref3]]
   ## age in years
   data.copy[, age.years := dat[, age]]
   ## gender (female = 1, male = 0)
