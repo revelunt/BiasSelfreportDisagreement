@@ -4,8 +4,9 @@ options(scipen = 999)
 rm(list = ls())
 
 ## install required packages and dependencies automatically
-list.of.packages <- c("car", "psych","texreg","rstudioapi","data.table", "devtools",
-                      "haven", "magrittr", "igraph", "intergraph", "ggplot2", "jtools")
+list.of.packages <- c("car", "psych","texreg","rstudioapi","data.table",
+                      "devtools", "formula.tools", "haven", "magrittr",
+                      "igraph", "intergraph", "ggplot2", "jtools")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) devtools::install_cran(new.packages, dependencies = T)
 if(!("patchwork" %in% installed.packages()[,"Package"])) devtools::install_github("thomasp85/patchwork")
@@ -84,18 +85,23 @@ dat[, canpref1.imputed := canpref1]
 dat[is.na(canpref1), canpref1.imputed := car::recode(kv2, "1 = 0; 2 = 1; else = 2")]
 dat[, table(canpref1, canpref1.imputed, exclude = NULL)]
 
-## calculate the proportion of exposure
-exp.dis.daily <- lapply(seq_len(length(date.range)), function(i) {
-                          if (i <= 7) {
-                            out <- cal.exposure.disagree(net = g[[i]], canpref = dat$canpref1.imputed, prop = T)
-                            out <- cbind(id = 1:341, out, day = i)
-                          } else if (i <= 21) {
-                            out <- cal.exposure.disagree(net = g[[i]], canpref = dat$canpref2, prop = T)
-                            out <- cbind(id = 1:341, out, day = i)
-                          } else {
-                            out <- cal.exposure.disagree(net = g[[i]], canpref = dat$canpref3, prop = T)
-                            out <- cbind(id = 1:341, out, day = i)
-                          }
+## calculate the amount of exposure
+exp.dis.daily <-
+  lapply(seq_len(length(date.range)),
+         function(i) {
+            if (i <= 7) {
+              out <- cal.exposure.disagree(net = g[[i]],
+                      canpref = dat$canpref1.imputed, prop = TRUE)
+              out <- cbind(id = 1:341, out, day = i)
+              } else if (i <= 21) {
+                out <- cal.exposure.disagree(net = g[[i]],
+                        canpref = dat$canpref2, prop = TRUE)
+                out <- cbind(id = 1:341, out, day = i)
+                } else {
+                  out <- cal.exposure.disagree(net = g[[i]],
+                            canpref = dat$canpref3, prop = TRUE)
+                  out <- cbind(id = 1:341, out, day = i)
+                  }
   return(out)
  })
 
@@ -125,26 +131,6 @@ cleaned.data <- cleaned.data %>% merge(.,
                  cbind(., exp.disagr.online.prcpt.W2 = dat$W2.disagree.online.perception),
                  by = "id")
 
-cleaned.data[, cor(dangerous.disc.W2, exp.disagr.offline.prcpt.W2)]
-bivariate.perm.test(cleaned.data, "dangerous.disc.W2", "exp.disagr.offline.prcpt.W2", cor)
-#         obs  llci.0.025  ulci.0.975
-# -0.04797520 -0.09458145  0.10673502
-
-cleaned.data[, cor(dangerous.disc.W2, exp.disagr.online.prcpt.W2)]
-bivariate.perm.test(cleaned.data, "dangerous.disc.W2", "exp.disagr.online.prcpt.W2", cor)
-#       obs llci.0.025 ulci.0.975
-# 0.2851594 -0.1049099  0.0980455
-
-## create differences between perception and behavioral measures
-## (+) values indicate the overestimation, and (-) means underestimation
-cleaned.data[, diff.exp.disagree.W2 := exp.disagr.online.prcpt.W2 - dangerous.disc.W2]
-cleaned.data[, summary(diff.exp.disagree.W2)]
-
-## permutation test indicates that the difference between
-## perception and objective behavior is significantly differ,
-## in a way that people tend to overestimate the exposure to differences
-diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W2", "dangerous.disc.W2", rep = 10000)
-
 ## during W3
 dat[, W3.disagree.for.liberal := rowMeans(.SD), .SDcols = c("hv116", "hv117")]
 dat[, W3.disagree.for.conservative := rowMeans(.SD), .SDcols = c("hv115", "hv116")]
@@ -159,47 +145,43 @@ cleaned.data <- cleaned.data %>% merge(.,
                 cbind(., exp.disagr.online.prcpt.W3 = dat$W3.disagree.online.perception),
                 by = "id")
 
-cleaned.data[, cor(dangerous.disc.W3, exp.disagr.offline.prcpt.W3)]
-bivariate.perm.test(cleaned.data, "dangerous.disc.W3", "exp.disagr.offline.prcpt.W3", cor)
-#        obs  llci.0.025  ulci.0.975
-# 0.03331218 -0.10793688  0.10286882
 
-cleaned.data[, cor(dangerous.disc.W3, exp.disagr.online.prcpt.W3)]
-bivariate.perm.test(cleaned.data, "dangerous.disc.W3", "exp.disagr.online.prcpt.W3", cor)
-#       obs llci.0.025 ulci.0.975
-# 0.2971547 -0.1130125  0.1110424
-
-## create differences between perception and behavioral measures
-## (+) values indicate the overestimation, and (-) means underestimation
-cleaned.data[, diff.exp.disagree.W3 := exp.disagr.online.prcpt.W3 - dangerous.disc.W3]
-cleaned.data[, summary(diff.exp.disagree.W3)]
-
-## permutation test indicates that the difference between
-## perception and objective behavior is significantly differ,
-## in a way that people tend to overestimate the exposure to differences
-diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W3", "dangerous.disc.W3", rep = 10000)
+## get ego's network size
+ego.netsize <- get.ego.netsize()
+cleaned.data[, ego.netsize.W1 :=
+               ego.netsize[day %in% c(1:7),
+               .(ego.netsize = mean(netsize)), by = id][, ego.netsize]]
+cleaned.data[, ego.netsize.W2 :=
+               ego.netsize[day %in% c(8:20),
+               .(ego.netsize = mean(netsize)), by = id][, ego.netsize]]
+cleaned.data[, ego.netsize.W3 :=
+               ego.netsize[day %in% c(21:27),
+               .(ego.netsize = mean(netsize)), by = id][, ego.netsize]]
 
 
-## eigenvector centrality
-daily.centrality <- lapply(seq_len(length(date.range)), function(i) {
-  centr.clo <- g[[i]] %>%
-    igraph::graph_from_adjacency_matrix(., mode = "directed", weighted = TRUE) %>%
-    igraph::centr_eigen(., directed = T)
-  centr.eigen <- centr.clo$vector
-  centr.eigen <- scale(centr.eigen)[,1]
-  centr.eigen <- cbind(id = 1:341, centr.eigen = centr.eigen, day = i)
-  centr.eigen
-})
+## get connected alters' eigenvector centrality
+centr.eigen <- get.alter.eigen.centr()
+cleaned.data[, alter.centr.eigen.W1 :=
+               centr.eigen[day %in% c(1:7),
+               .(alter.centr.eigen = mean(alter.centr.eigen)), by = id][, alter.centr.eigen]]
+cleaned.data[, alter.centr.eigen.W2 :=
+               centr.eigen[day %in% c(8:20),
+               .(alter.centr.eigen = mean(alter.centr.eigen)), by = id][, alter.centr.eigen]]
+cleaned.data[, alter.centr.eigen.W3 :=
+               centr.eigen[day %in% c(21:27),
+               .(alter.centr.eigen = mean(alter.centr.eigen)), by = id][, alter.centr.eigen]]
 
-daily.centrality <- setDT(as.data.frame(do.call(rbind, daily.centrality)))
-
-cleaned.data[, centr.eigen.W1 :=
-               daily.centrality[day %in% c(1:7),
-               .(centr.eigen = mean(centr.eigen)), by = id][, centr.eigen]]
-cleaned.data[, centr.eigen.W2 := daily.centrality[day %in% c(8:20),
-               .(centr.eigen = mean(centr.eigen)), by = id][, centr.eigen]]
-cleaned.data[, centr.eigen.W3 := daily.centrality[day %in% c(21:27),
-               .(centr.eigen = mean(centr.eigen)), by = id][, centr.eigen]]
+## get connected alters' indegree centrality
+centr.indeg <- get.alter.indegree.centr()
+cleaned.data[, alter.centr.indeg.W1 :=
+               centr.indeg[day %in% c(1:7),
+               .(alter.centr.ind = mean(alter.centr.ind)), by = id][, alter.centr.ind]]
+cleaned.data[, alter.centr.indeg.W2 :=
+               centr.indeg[day %in% c(8:20),
+               .(alter.centr.ind = mean(alter.centr.ind)), by = id][, alter.centr.ind]]
+cleaned.data[, alter.centr.indeg.W3 :=
+               centr.indeg[day %in% c(21:27),
+               .(alter.centr.ind = mean(alter.centr.ind)), by = id][, alter.centr.ind]]
 
 
 ## add a series of correlates to data.frame
@@ -246,7 +228,8 @@ cleaned.data[, centr.eigen.W3 := daily.centrality[day %in% c(21:27),
   cleaned.data[, internal.efficacy.W1 := 8 - rowMeans(dat[, .SD, .SDcols = c("pv163", "pv164")])]
   cleaned.data[, internal.efficacy.W2 := 8 - rowMeans(dat[, .SD, .SDcols = c("kv177", "kv178")])]
   dat[, .(hv232, hv233, hv235, hv237)][, psych::alpha(as.data.frame(.SD), check.keys = T)]
-  cleaned.data[, internal.efficacy.W3 := 8 - rowMeans(dat[, .SD, .SDcols = c("hv232","hv233","hv235","hv237")])]
+  cleaned.data[, internal.efficacy.W3 :=
+                 8 - rowMeans(dat[, .SD, .SDcols = c("hv232","hv233","hv235","hv237")])]
 
   ## political interest
   cleaned.data[, pol.interest.W1 := rowMeans(dat[, .SD, .SDcols = c("pv165", "pv166")] )]
@@ -267,68 +250,63 @@ cleaned.data[, centr.eigen.W3 := daily.centrality[day %in% c(21:27),
   dat[, kv93:kv97][, psych::alpha(as.data.frame(.SD), check.keys = T)]
   cleaned.data[, outgroup.negativity.bias.W2 := rowMeans(
     dat[, .SD, .SDcols = c("kv93", "kv94", "kv95", "kv96", "kv97")])]
+  dat[, hv148:hv152][, psych::alpha(as.data.frame(.SD), check.keys = T)]
+  cleaned.data[, outgroup.negativity.bias.W3 := rowMeans(
+    dat[, .SD, .SDcols = c("hv148", "hv149", "hv150", "hv151", "hv152")])]
+
   ## in-group favoritism
   dat[, kv160:kv164][, psych::alpha(as.data.frame(.SD), check.keys = T)]
   cleaned.data[, ingroup.favoritism.bias.W2 := rowMeans(
     dat[, .SD, .SDcols = c("kv160", "kv161", "kv162", "kv163", "kv164")])]
+  dat[, hv215:hv219][, psych::alpha(as.data.frame(.SD), check.keys = T)]
+  cleaned.data[, ingroup.favoritism.bias.W3 := rowMeans(
+    dat[, .SD, .SDcols = c("hv215", "hv216", "hv217", "hv218", "hv219")])]
   ## affective polarization (ingroup - outgroup)
-  cleaned.data[, affective.polarization := ingroup.favoritism.bias.W2 - outgroup.negativity.bias.W2]
+  cleaned.data[, affective.polarization.W2 := ingroup.favoritism.bias.W2 - outgroup.negativity.bias.W2]
+  cleaned.data[, affective.polarization.W3 := ingroup.favoritism.bias.W3 - outgroup.negativity.bias.W3]
 
 ## check the over-time change of key measurements
-  long.data <- melt(cleaned.data, id.vars = c("id", "age.years", "female", "edu",
-                                             "household.income", "residential.region",
-                                             "consistency.motivation", "understanding.motivation",
-                                             "hedonic.motivation", "internet.news.use.W2",
-                                             "newspaper.use.W2", "tv.news.use.W2",
-                                             "outgroup.negativity.bias.W2", "ingroup.favoritism.bias.W2"),
-                   measure = patterns("safe.disc.W[1-3]$",
-                                      "dangerous.disc.W[1-3]$",
-                                      "exp.disagr.offline.prcpt.W[1-3]$",
-                                      "diff.exp.disagree.W[2-3]$",
-                                      "canpref.W[1-3]$",
-                                      "pref.certainty.W[1-3]$",
-                                      "ideo.W[1-3]$",
-                                      "perceived.opinion.climate.W[2-3]$",
-                                      "internal.efficacy.W[1-3]$",
-                                      "pol.interest.W[1-3]$"),
-                   value.name = c("safe.disc", "dangerous.disc", "exp.disagr.offline.prcpt",
-                                  "diff.exp.disagree", "canpref", "pref.certainty",
-                                  "ideo", "perceived.opinion.climate", "internal.efficacy", "pol.interest"),
-                   variable.name = "Wave", variable.factor = T)
+  long.data <- melt(cleaned.data,
+                    id.vars = c("id"),
+                    measure = patterns("safe.disc.W[1-3]$",
+                                       "dangerous.disc.W[1-3]$",
+                                       "exp.disagr.offline.prcpt.W[1-3]$",
+                                       "perceived.opinion.climate.W[2-3]$"),
+                    value.name = c("safe.disc", "dangerous.disc", "exp.disagr.offline.prcpt",
+                                   "perceived.opinion.climate"),
+                    variable.name = "Wave", variable.factor = T)
 
   ## manually correct some misassignment of variable waves
-  long.data[Wave == 3, diff.exp.disagree := long.data[Wave == 2, diff.exp.disagree]]
-  long.data[Wave == 2, diff.exp.disagree := long.data[Wave == 1, diff.exp.disagree]]
-  long.data[Wave == 1, diff.exp.disagree := NA]
   long.data[Wave == 3, perceived.opinion.climate := long.data[Wave == 2, perceived.opinion.climate]]
   long.data[Wave == 2, perceived.opinion.climate := long.data[Wave == 1, perceived.opinion.climate]]
   long.data[Wave == 1, perceived.opinion.climate := NA]
 
   ## self-reported exposure to disagreement measure (exp.disagr.offline.prcpt)
-  ggplot(long.data, aes(x = Wave, y = exp.disagr.offline.prcpt, group = factor(id))) +
+  p1 <- ggplot(long.data, aes(x = Wave, y = exp.disagr.offline.prcpt, group = factor(id))) +
     stat_summary(aes(group = 1), geom = "point", fun.y = mean, shape = 17, size = 3) +
     stat_smooth(aes(group = 1), method = "lm", color = "red", se = T) +
-    ggtitle("Dangerous discussion (proportion)")
+    ggtitle("Self-reported exposure to disagreement")
 
   ## safe and dangerous discussion
-  p1 <- ggplot(long.data, aes(x = Wave, y = safe.disc, group = factor(id))) +
-    stat_summary(aes(group = 1), geom = "point", fun.y = mean, shape = 17, size = 3) +
-    stat_smooth(aes(group = 1), method = "lm", color = "red", se = T) +
-    ggtitle("Safe discussion (proportion)")
+  # p1 <- ggplot(long.data, aes(x = Wave, y = safe.disc, group = factor(id))) +
+  #   stat_summary(aes(group = 1), geom = "point", fun.y = mean, shape = 17, size = 3) +
+  #   stat_smooth(aes(group = 1), method = "lm", color = "red", se = T) +
+  #   ggtitle("Safe discussion (proportion)")
 
   p2 <- ggplot(long.data, aes(x = Wave, y = dangerous.disc, group = factor(id))) +
     stat_summary(aes(group = 1), geom = "point", fun.y = mean, shape = 17, size = 3) +
     stat_smooth(aes(group = 1), method = "lm", color = "red", se = T) +
-    ggtitle("Dangerous discussion (proportion)")
+    ggtitle("Digitally logged exposure to out-party messages (proportion)")
 
   p1 + p2 + plot_layout(nrow = 1)
 
   ## perceived opinion climate
-  ggplot(long.data[Wave %in% c(1,2),], aes(x = Wave, y = perceived.opinion.climate, group = factor(id))) +
+  ggplot(long.data[Wave %in% c(2,3),],
+         aes(x = Wave, y = perceived.opinion.climate, group = factor(id))) +
     stat_summary(aes(group = 1), geom = "point", fun.y = mean, shape = 17, size = 3) +
     stat_smooth(aes(group = 1), method = "lm", color = "red", se = T) +
-    ggtitle("Perceived opinion climate") + labs(caption = "(higher value means more in-group prevalence)") +
-    scale_x_discrete(labels=c("1" = "Wave 2", "2" = "Wave 3"))
+    ggtitle("Perceived opinion climate") +
+    labs(caption = "(higher value means more in-group prevalence)")
 
 
 

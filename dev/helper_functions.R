@@ -10,7 +10,7 @@
 ## function to calculate exposure to disagreement
 ## based on ego's and alters' candidate preferences
 
-cal.exposure.disagree <- function(net, canpref, prop = TRUE) {
+cal.exposure.disagree <- function(net, canpref, prop = FALSE) {
 
   out <- t(sapply(1:341, function(x) {
     tempvec <- net[x, ]
@@ -121,6 +121,121 @@ add.demographics <- function(data.to.process) {
 }
 
 
+## a set of functions to get sum of connected alters' centrality
+## in calculating sum of <<alters'>> centrality scores,
+## measures are  weighted by the number of ego's choice (exposure)
+get.alter.eigen.centr <- function() {
+
+  ## check if "date.range" and "g" are present in the GlobalEnv
+  if (!("date.range" %in% ls(envir = .GlobalEnv))) stop("date.range should be present in the GlobalEnv!")
+  if (!("g" %in% ls(envir = .GlobalEnv))) stop("network data ('g') should be present in the GlobalEnv!")
+  date.range <- get("date.range", envir = .GlobalEnv)
+  g <- get("g", envir = .GlobalEnv)
+
+  centr.eigen <- lapply(seq_len(length(date.range)), function(i) {
+
+    ## extract daily exposure network
+    ## make tempt network as matrix object through igraph conversion
+    net.day.tempt <- net.day <- g[[i]] %>%
+      igraph::graph_from_adjacency_matrix(., mode = "directed", weighted = NULL)
+
+    ## for every ego, remove ego from the network and
+    ## and calculate indegree of rest of alters
+    ## this gives indegree of alters excluding ego's own connection
+    alter.centr.eigen <- sapply(seq_len(341), function(v) {
+
+      tempt <- delete_vertices(net.day.tempt, v)
+      centr.eigen <- igraph::centr_eigen(tempt, directed = T)
+      centr.eigen <- centr.eigen$vector
+
+      index <- c(v, setdiff(1:341, v))
+      centr.eigen <- c(0, centr.eigen)[index]
+
+      ## bind with ego's own choice, and make a cross-product
+      alter.centr.eigen <- net.day[v,] %*% centr.eigen
+      alter.centr.eigen <- sum(alter.centr.eigen)
+      alter.centr.eigen
+    })
+
+    centr.eigen <- scale(alter.centr.eigen)[,1]
+    alter.centr.eigen <- cbind(id = 1:341, alter.centr.eigen = centr.eigen, day = i)
+    alter.centr.eigen
+  })
+
+  alter.centr.eigen <- do.call(rbind, centr.eigen)
+  require(data.table)
+  alter.centr.eigen <- setDT(as.data.frame(alter.centr.eigen))
+  alter.centr.eigen
+}
+
+## ego's own connection to alter is not considered in
+## deriving the measure
+get.alter.indegree.centr <- function() {
+
+  ## check if "date.range" and "g" are present in the GlobalEnv
+  if (!("date.range" %in% ls(envir = .GlobalEnv))) stop("date.range should be present in the GlobalEnv!")
+  if (!("g" %in% ls(envir = .GlobalEnv))) stop("network data ('g') should be present in the GlobalEnv!")
+  date.range <- get("date.range", envir = .GlobalEnv)
+  g <- get("g", envir = .GlobalEnv)
+
+  alter.centr <- lapply(seq_len(length(date.range)), function(i) {
+
+    ## extract daily exposure network
+    ## make tempt network as matrix object through igraph conversion
+    net.day.tempt <- net.day <- g[[i]] %>%
+      igraph::graph_from_adjacency_matrix(., mode = "directed", weighted = NULL)
+
+    ## for every ego, remove ego from the network and
+    ## and calculate indegree of rest of alters
+    ## this gives indegree of alters exclusing ego's own connection
+    alter.centr.ind <- sapply(seq_len(341), function(v) {
+
+      tempt <- delete_vertices(net.day.tempt, v)
+      centr.ind <- igraph::centr_degree(tempt, mode = "in", loops = F, normalized = F)
+      centr.ind <- centr.ind$res
+
+      index <- c(v, setdiff(1:341, v))
+      centr.ind <- c(0, centr.ind)[index]
+
+      ## bind with ego's own choice, and make a cross-product
+      alter.centr.ind <- net.day[v,] %*% centr.ind
+      alter.centr.ind <- sum(alter.centr.ind)
+      alter.centr.ind
+    })
+    alter.centr.ind <- scale(alter.centr.ind)[,1]
+    alter.centr.ind <- cbind(id = 1:341, alter.centr.ind = alter.centr.ind, day = i)
+    alter.centr.ind
+  })
+
+  alter.centr.ind <- do.call(rbind, alter.centr)
+  require(data.table)
+  alter.centr.ind <- setDT(as.data.frame(alter.centr.ind))
+  alter.centr.ind
+}
+
+
+## ego's network size
+get.ego.netsize <- function() {
+
+  ## check if "date.range" and "g" are present in the GlobalEnv
+  if (!("date.range" %in% ls(envir = .GlobalEnv))) stop("date.range should be present in the GlobalEnv!")
+  if (!("g" %in% ls(envir = .GlobalEnv))) stop("network data ('g') should be present in the GlobalEnv!")
+  date.range <- get("date.range", envir = .GlobalEnv)
+  g <- get("g", envir = .GlobalEnv)
+
+  ego.netsize <- lapply(seq_len(length(date.range)), function(i) {
+    net.day <- g[[i]] %>%
+      igraph::graph_from_adjacency_matrix(., mode = "directed", weighted = TRUE)
+    netsize <- igraph::degree(net.day, mode = "out", loops = F)
+    netsize <- cbind(id = 1:341, netsize = netsize, day = i)
+    netsize
+    })
+
+  ego.netsize <- do.call(rbind, ego.netsize)
+  require(data.table)
+  ego.netsize <- setDT(as.data.frame(ego.netsize))
+  ego.netsize
+}
 
 
 
@@ -129,74 +244,36 @@ add.demographics <- function(data.to.process) {
 ## 2. Analysis functions ##
 ## --------------------- ##
 
-estimate.unconditional.indirect <- function(dat, i) {
-  ## i is the index value for resample
+require(formula.tools)
+est.uncond.indirect <- function(dat, ## data frame to pass for bootstrapping
+                                i, ## i = the index value for resample
+                                lm.model.M, ## lm object estimating M
+                                lm.model.Y, ## lm object estimating Y
+                                pred) { ## focal predictor, X (can accept multiple variables)
+
+  ## extract mediator automatically from the model of M
+  m.name <- formula.tools::lhs.vars(formula(lm.model.M))
+
+  ## check mediator is indeed included in the model of Y
+  check <- !(m.name %in% formula.tools::rhs.vars(formula(lm.model.Y)))
+  if (isTRUE(check)) stop("lm.model.Y does not have proper mediator variable as in lm.model.M!")
+
   resample <- dat[i,]
-  model.M.resample <- lm(formula(model.M1), data = resample)
-  model.Y.resample <- lm(formula(model.Y), data = resample)
+  model.M.resample <- lm(formula(lm.model.M), data = resample)
+  model.Y.resample <- lm(formula(lm.model.Y), data = resample)
 
-  a1 <- summary(model.M.resample)$coef['safe.disc.W1',1]
-  a2 <- summary(model.M.resample)$coef['dangerous.disc.W1',1]
-
-  b1 <- summary(model.Y.resample)$coef['perceived.opinion.climate.W2',1]
-  c1 <- summary(model.Y.resample)$coef['safe.disc.W1',1]
-  c2 <- summary(model.Y.resample)$coef['dangerous.disc.W1',1]
+  a <- summary(model.M.resample)$coef[pred, 1]
+  b <- summary(model.Y.resample)$coef[m.name, 1]
+  c <- summary(model.Y.resample)$coef[pred, 1]
 
   ## effect decomposition ##
   ## unconditional indirect effect
-  ## safe.exposure -> opinion climate -> self-reported exposure to disagree
-  ind.safe.opi.climate <- a1*b1
-  ## dangerous.exposure -> opinion climate -> self-reported exposure to disagree
-  ind.dangerous.exposure.opi.climate <- a2*b1
+  ind.effect <- a*b
+  ## unconditional direct effect
+  dir.effect <- c
 
-  return.vec <-
-    ## unconditional indirect effect
-    c(ind.safe.opi.climate = ind.safe.opi.climate,
-      ind.dangerous.exposure.opi.climate = ind.dangerous.exposure.opi.climate,
-      direct.safe = c1,
-      direct.dangerous = c2)
-
-  # return indirect effects
-  return(return.vec)
-}
-
-#### TO BE CONTINUTED -- revise based on moderated moderated mediation
-#### ADD index of moderated moderated mediation
-
-estimate.conditional.indirect <- function(dat, i) {
-  ## i is the index value for resample
-  resample <- dat[i,]
-  model.M2.resample <- lm(formula(model.M2), data = resample)
-  model.Y.resample <- lm(formula(model.Y), data = resample)
-
-  a1 <- summary(model.M2.resample)$coef['safe.disc.W1',1]
-  a2_1 <- summary(model.M2.resample)$coef['dangerous.disc.W1',1]
-  # a2_2 <- summary(model.M2.resample)$coef['ideo_str.W2',1]
-  a2_3 <- summary(model.M2.resample)$coef['dangerous.disc.W1:ideo_str.W2',1]
-
-  b1 <- summary(model.Y.resample)$coef['perceived.opinion.climate.W2',1]
-  c1 <- summary(model.Y.resample)$coef['safe.disc.W1',1]
-  c2 <- summary(model.Y.resample)$coef['dangerous.disc.W1',1]
-
-  ## effect decomposition ##
-  ## safe.exposure -> opinion climate -> self-reported exposure to disagree
-  ind.safe.opi.climate <- a1*b1
-  ## index of moderated mediation
-  ## dangerous.exposure -> opinion climate -> self-reported exposure to disagree
-  ## moderated by ideo_strength
-  indexModMed <- a2_3*b1
-  ## conditional indirect effects at every values of ideo_strength
-  cond.ind <- (a2_1 + c(0:3)*a2_3)*b1
-
-  return.vec <-
-    ## unconditional indirect effect
-    c(ind.safe.opi.climate = ind.safe.opi.climate,
-      indexModMed = indexModMed,
-      cond.ind = cond.ind,
-      direct.safe = c1,
-      direct.dangerous = c2)
-
-  # return indirect effects
+  # return effect decomposition
+  return.vec <- c(ind.effect = ind.effect, dir.effect = dir.effect)
   return(return.vec)
 }
 
