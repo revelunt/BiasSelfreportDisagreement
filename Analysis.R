@@ -7,6 +7,7 @@ if (!("cleaned.data" %in% ls())) source("dev/PreProcess.R")
 require(texreg)
 require(ggplot2)
 require(jtools)
+require(plotROC)
 
 ## we use 'cleaned.data' and 'long.data' for the rest of the analysis
 # > colnames(cleaned.data)
@@ -47,48 +48,82 @@ require(jtools)
 
 
 cleaned.data[, cor(dangerous.disc.W2, exp.disagr.offline.prcpt.W2)]
-bivariate.perm.test(cleaned.data, "dangerous.disc.W2", "exp.disagr.offline.prcpt.W2", cor)
+bivariate.perm.test(cleaned.data, "dangerous.disc.W2", "exp.disagr.offline.prcpt.W2")
 #         obs  llci.0.025  ulci.0.975
-# -0.04797520 -0.09458145  0.10673502
+# -0.04797520  -0.1017732  0.1072070
+# make the rounded percentage and rerun the correlation does not change the results!
+cleaned.data[, dangerous.disc.W2.prop := (dangerous.disc.W2 %>% round(., digits = 2))*100]
+bivariate.perm.test(cleaned.data, "dangerous.disc.W2.prop", "exp.disagr.offline.prcpt.W2")
 
-cleaned.data[, cor(dangerous.disc.W2, exp.disagr.online.prcpt.W2)]
-bivariate.perm.test(cleaned.data, "dangerous.disc.W2", "exp.disagr.online.prcpt.W2", cor)
-#       obs llci.0.025 ulci.0.975
-# 0.2851594 -0.1049099  0.0980455
+cleaned.data[, cor(dangerous.disc.W2.prop, exp.disagr.online.prcpt.W2)]
+bivariate.perm.test(cleaned.data, "dangerous.disc.W2.prop", "exp.disagr.online.prcpt.W2")
+# obs.minus.perm llci.0.025 ulci.0.975
+#      0.2851594  0.1758708  0.3888837
 
 ## create differences between perception and behavioral measures
 ## (+) values indicate the overestimation, and (-) means underestimation
-cleaned.data[, diff.exp.disagree.W2 := exp.disagr.online.prcpt.W2 - dangerous.disc.W2]
+cleaned.data[, diff.exp.disagree.W2 := exp.disagr.online.prcpt.W2 - dangerous.disc.W2.prop]
 cleaned.data[, summary(diff.exp.disagree.W2)]
 
 ## permutation test indicates that the difference between
 ## perception and objective behavior is significantly differ,
 ## in a way that people tend to overestimate the exposure to differences
-diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W2", "dangerous.disc.W2", rep = 10000)
+diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W2", "dangerous.disc.W2.prop", rep = 20000)
 
 
 cleaned.data[, cor(dangerous.disc.W3, exp.disagr.offline.prcpt.W3)]
-bivariate.perm.test(cleaned.data, "dangerous.disc.W3", "exp.disagr.offline.prcpt.W3", cor)
-#         obs   llci.0.025   ulci.0.975
-# 0.002198055 -0.100956353  0.118166630
+bivariate.perm.test(cleaned.data, "dangerous.disc.W3", "exp.disagr.offline.prcpt.W3")
+# obs.minus.perm    llci.0.025   ulci.0.975
+#     0.03105019   -0.06974810   0.14456759
 
 cleaned.data[, cor(dangerous.disc.W3, exp.disagr.online.prcpt.W3)]
-bivariate.perm.test(cleaned.data, "dangerous.disc.W3", "exp.disagr.online.prcpt.W3", cor)
-#       obs  llci.0.025  ulci.0.975
-#0.01856405 -0.10507169  0.11222190
+bivariate.perm.test(cleaned.data, "dangerous.disc.W3", "exp.disagr.online.prcpt.W3")
+# obs.minus.perm     llci.0.025     ulci.0.975
+#      0.2958441      0.1926712      0.4104359
 
 ## create differences between perception and behavioral measures
 ## (+) values indicate the overestimation, and (-) means underestimation
-cleaned.data[, diff.exp.disagree.W3 := exp.disagr.online.prcpt.W3 - dangerous.disc.W3]
+cleaned.data[, dangerous.disc.W3.prop := (dangerous.disc.W3 %>% round(., digits = 2))*100]
+cleaned.data[, diff.exp.disagree.W3 := exp.disagr.online.prcpt.W3 - dangerous.disc.W3.prop]
 cleaned.data[, summary(diff.exp.disagree.W3)]
 
 ## permutation test indicates that the difference between
 ## perception and objective behavior is significantly differ,
 ## in a way that people tend to overestimate the exposure to differences
-diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W3", "dangerous.disc.W3", rep = 10000)
+diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W3", "dangerous.disc.W3.prop", rep = 20000)
 
+## make figures
+qq.out2 <- with(cleaned.data,
+                qqplot(x = exp.disagr.online.prcpt.W2,
+                       y = dangerous.disc.W2.prop,
+                       plot.it = FALSE)) %>% as.data.frame(.) %>% setDT(.)
 
+qq.out3 <- with(cleaned.data,
+               qqplot(x = exp.disagr.online.prcpt.W3,
+                      y = dangerous.disc.W3.prop,
+                      plot.it = FALSE)) %>% as.data.frame(.) %>% setDT(.)
 
+qq2 <- ggplot(qq.out2, aes(x = x, y = y)) +
+  geom_jitter(width = 0.02, color = "grey") + theme_bw() +
+  geom_boxplot(aes(group = x), outlier.colour = "grey", outlier.shape = 1) +
+  stat_summary(fun.y = median, geom = "line", aes(group=1), color = "red") +
+  geom_segment(aes(x = 0, xend = 100, y = 0, yend = 100),
+               lty = 2, color = "grey") +
+  xlab("Perception (% of Exposure to disagreement)") +
+  ylab("Activity log (Mean proportion)") +
+  ggtitle("Quantile-Quantile plot, Wave 2")
+
+qq3 <- ggplot(qq.out3, aes(x = x, y = y)) +
+  geom_jitter(width = 0.02, color = "grey") + theme_bw() +
+  geom_boxplot(aes(group = x), outlier.colour = "grey", outlier.shape = 1) +
+  stat_summary(fun.y = median, geom = "line", aes(group=1), color = "red") +
+  geom_segment(aes(x = 0, xend = 100, y = 0, yend = 100),
+               lty = 2, color = "grey") +
+  xlab("Perception (% of Exposure to disagreement)") +
+  ylab("Activity log (Mean proportion)") +
+  ggtitle("Quantile-Quantile plot, Wave 3")
+
+qq2 + qq3 + plot_layout(nrow = 1)
 
 ## ------------------------------------- ##
 ## Predicting perceived opinion climates ##
@@ -99,7 +134,7 @@ model.M1 <- lm(perceived.opinion.climate.W2 ~
                 ## focal predictor
                 safe.disc.W1 + dangerous.disc.W1 +
                  ## discussion motivation
-                 consistency.motivation + understanding.motivation +
+                 ## consistency.motivation + understanding.motivation +
                  ## demographic controls
                  age.years + female + edu + household.income +
                  ## political correlates
@@ -137,20 +172,9 @@ jtools::interact_plot(model.M1.int3, pred = "dangerous.disc.W1", modx = "alter.c
 
 
 ## predicting self-reported exposure to disagreement
-model.Y <- lm(exp.disagr.online.prcpt.W3 ~
-                ## lagged effect
-                ## exp.disagr.online.prcpt.W2 +
-                ## focal predictor
-                safe.disc.W1 + dangerous.disc.W1 +
-                ## demographic controls
-                age.years + female + edu + household.income +
-                ## political correlates
-                canpref.W2 + ideo_str.W2 + internal.efficacy.W2 + pol.interest.W2 +
-                ## media exposure
-                internet.news.use.W2 + newspaper.use.W2 + tv.news.use.W2 +
-                ## mediator
-                perceived.opinion.climate.W2 + affective.polarization.W2
-              ,
+model.Y <- lm(update.formula(model.M1,
+               exp.disagr.online.prcpt.W3 ~ .
+               + perceived.opinion.climate.W2 + affective.polarization.W2),
               data = cleaned.data); summary(model.Y)
 
 screenreg(list(model.M1, model.M2, model.Y),
@@ -175,23 +199,40 @@ boot.test1 <- boot(dat = cleaned.data, statistic = est.uncond.indirect,
                    pred = c("safe.disc.W1", "dangerous.disc.W1"))
 out.uncond <- get.boot.stats(boot.test1)
 
+## cf. when controlling for lagged effect of Y:
+model.Y1 <- lm(update.formula(model.Y, . ~ exp.disagr.online.prcpt.W2 + .),
+               data = cleaned.data)
+## effect is still significant but at .90 level
+summary(model.Y1)
 
+set.seed(1234)
+boot.test1.lagged <- boot(dat = cleaned.data, statistic = est.uncond.indirect,
+                   R = 20000, parallel = "multicore", ncpus = 8,
+                   lm.model.M = model.M1, lm.model.Y = model.Y1,
+                   pred = c("safe.disc.W1", "dangerous.disc.W1"))
+out.uncond.lagged <- get.boot.stats(boot.test1.lagged, conf = 0.90)
 
 
 
 
 ## estimate conditional indirect effect
 ## as a function of ideological identification strength
-estimate.conditional.indirect
+est.cond.indirect
 
 set.seed(1234)
-boot.test2 <- boot(cleaned.data, estimate.conditional.indirect,
-                   R = 20000, parallel = "multicore", ncpus = 8)
-out.cond <- get.boot.stats(boot.test2)
-
+boot.test2 <- boot(cleaned.data, statistic = est.cond.indirect,
+                   R = 20000, parallel = "multicore", ncpus = 8,
+                   lm.model.M = model.M1.int1, lm.model.Y = model.Y,
+                   pred = "dangerous.disc.W1",
+                   modx = "ideo_str.W2")
+out.cond2 <- get.boot.stats(boot.test2)
 
 ## plot conditional indirect effects
-plot.cond.ind <- cbind(moderator = as.vector(0:3), out.cond[3:6,])
+mod.val <- cleaned.data[, quantile(ideo_str.W2, seq(from = 0, to = 1, by = 0.05))]
+critical.val <- jnt(model.M1.int1, "dangerous.disc.W1", "ideo_str.W2")
+mod.val <- sort(unique(c(mod.val, critical.val)))
+
+plot.cond.ind <- cbind(moderator = mod.val, out.cond2[-c(1, length(boot.test2$t0)),])
 require(data.table)
 setDT(plot.cond.ind)
 ggplot(plot.cond.ind, aes(x = moderator, y = coef)) +

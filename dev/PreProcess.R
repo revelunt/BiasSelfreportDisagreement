@@ -6,7 +6,7 @@ rm(list = ls())
 ## install required packages and dependencies automatically
 list.of.packages <- c("car", "psych","texreg","rstudioapi","data.table",
                       "devtools", "formula.tools", "haven", "magrittr",
-                      "igraph", "intergraph", "ggplot2", "jtools")
+                      "igraph", "intergraph", "ggplot2", "jtools", "plotROC")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) devtools::install_cran(new.packages, dependencies = T)
 if(!("patchwork" %in% installed.packages()[,"Package"])) devtools::install_github("thomasp85/patchwork")
@@ -117,8 +117,8 @@ cleaned.data[, cor(dangerous.disc.W1, exp.disagr.offline.prcpt.W1)]
 
 
 ## during W2
-dat[, W2.disagree.for.liberal := rowMeans(.SD), .SDcols = c("kv61", "kv62")]
-dat[, W2.disagree.for.conservative := rowMeans(.SD), .SDcols = c("kv60", "kv61")]
+dat[, W2.disagree.for.liberal := rowSums(.SD), .SDcols = c("kv61", "kv62")]
+dat[, W2.disagree.for.conservative := rowSums(.SD), .SDcols = c("kv60", "kv61")]
 
 dat[canpref2 == 1, W2.disagree.online.perception := W2.disagree.for.liberal]
 dat[canpref2 == 0, W2.disagree.online.perception := W2.disagree.for.conservative]
@@ -132,8 +132,8 @@ cleaned.data <- cleaned.data %>% merge(.,
                  by = "id")
 
 ## during W3
-dat[, W3.disagree.for.liberal := rowMeans(.SD), .SDcols = c("hv116", "hv117")]
-dat[, W3.disagree.for.conservative := rowMeans(.SD), .SDcols = c("hv115", "hv116")]
+dat[, W3.disagree.for.liberal := rowSums(.SD), .SDcols = c("hv116", "hv117")]
+dat[, W3.disagree.for.conservative := rowSums(.SD), .SDcols = c("hv115", "hv116")]
 
 dat[canpref3 == 1, W3.disagree.online.perception := W3.disagree.for.liberal]
 dat[canpref3 == 0, W3.disagree.online.perception := W3.disagree.for.conservative]
@@ -141,7 +141,7 @@ dat[canpref3 == 0, W3.disagree.online.perception := W3.disagree.for.conservative
 cleaned.data <- cleaned.data %>% merge(.,
                 exp.dis.daily[day > 21, .(safe.disc.W3 = mean(safe.disc),
                                    dangerous.disc.W3 = mean(dangerous.disc)), by = id] %>%
-                cbind(., exp.disagr.offline.prcpt.W3 = dat$hv277) %>%
+                cbind(., exp.disagr.offline.prcpt.W3 = dat$hv277) %>% ## % of disagreement
                 cbind(., exp.disagr.online.prcpt.W3 = dat$W3.disagree.online.perception),
                 by = "id")
 

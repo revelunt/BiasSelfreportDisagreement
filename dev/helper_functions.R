@@ -34,10 +34,8 @@ cal.exposure.disagree <- function(net, canpref, prop = FALSE) {
 }
 
 
-## function to perform bivariate permutation test
-## which produces test statistics of a given choice
-## function (FUN) must accept two variable names as the arguments (e.g., cor)
-bivariate.perm.test <- function(data, var1, var2, FUN,
+## function to perform bivariate permutation test for correlation
+bivariate.perm.test <- function(data, var1, var2,
                                  rep = 1000, probs = 0.95) {
 
   if (!('data.table' %in% class(data))) stop("data must be data.table type")
@@ -48,17 +46,18 @@ bivariate.perm.test <- function(data, var1, var2, FUN,
   var1 <- data[, get(var1)]
   var2 <- data[, get(var2)]
 
-  FUN <- match.fun(FUN)
-  obs <- FUN(var1, var2)
+  cor.obs <- cor(var1, var2)
 
-  perm <- sort(sapply(seq_len(rep), function(x) {
-    var2.resample <- sample(var2, size = length(var2), replace = TRUE)
-    FUN(var1, var2.resample)
+  cor.perm <- sort(sapply(seq_len(rep), function(x) {
+    var2.resample <- sample(var2, size = length(var2), replace = FALSE)
+    cor.perm <- cor(var1, var2.resample)
+    cor.obs - cor.perm
   }))
 
-  CIs <- quantile(perm, c(alpha1, alpha2))
-  out <- c(obs, CIs[1], CIs[2])
-  names(out) <- c("obs", paste('llci', alpha1, sep = "."), paste('ulci', alpha2, sep = "."))
+  median.perm <- median(cor.perm)
+  CIs <- quantile(cor.perm, c(alpha1, alpha2))
+  out <- c(median.perm,  CIs[1], CIs[2])
+  names(out) <- c("obs.minus.perm", paste('llci', alpha1, sep = "."), paste('ulci', alpha2, sep = "."))
 
   return(out)
 }
@@ -79,7 +78,7 @@ diff.perm.test <- function(data, var1, var2,
   diff.obs.mean <- mean(diff.obs)
 
   perm <- sort(sapply(seq_len(rep), function(x) {
-    var2.resample <- sample(var2, size = length(var2), replace = TRUE)
+    var2.resample <- sample(var2, size = length(var2), replace = FALSE)
     diff.perm <- (var1 - var2.resample)
     mean(diff.perm)
   }))
@@ -304,3 +303,83 @@ get.boot.stats <- function(boot.out, type = "bca", ...) {
 
   dat.out
 }
+
+## function to find JN point of transition
+jnt <- function(.lm, pred, modx, alpha=.05) {
+  require(stringi)
+  b1 = coef(.lm)[pred]
+  b3 = coef(.lm)[stri_startswith_fixed(names(coef(.lm)), paste0(pred,":")) | stri_endswith_fixed(names(coef(.lm)), paste0(":",pred))]
+  se_b1 = coef(summary(.lm))[pred, 2]
+  se_b3 = coef(summary(.lm))[stri_startswith_fixed(names(coef(.lm)), paste0(pred,":")) | stri_endswith_fixed(names(coef(.lm)), paste0(":",pred)), 2]
+  COV_b1b3 = vcov(.lm)[pred, stri_startswith_fixed(names(coef(.lm)), paste0(pred,":")) | stri_endswith_fixed(names(coef(.lm)), paste0(":",pred))]
+  t_crit = qt(1-alpha/2, .lm$df.residual)
+  # see Bauer & Curran, 2005
+  a = t_crit^2 * se_b3^2 - b3^2
+  b = 2 * (t_crit^2 * COV_b1b3 - b1 * b3)
+  c = t_crit^2 * se_b1^2 - b1^2
+  jn = c(
+    (-b - sqrt(b^2 - 4 * a * c)) / (2 * a),
+    (-b + sqrt(b^2 - 4 * a * c)) / (2 * a)
+  )
+  JN = sort(unname(jn))
+  JN = JN[JN>=min(.lm$model[,modx]) & JN<=max(.lm$model[,modx])]
+  JN
+}
+
+
+## estimate conditional effects
+est.cond.indirect <- function(dat, ## data frame to pass for bootstrapping
+                                i, ## i = the index value for resample
+                                lm.model.M, ## lm object estimating M
+                                lm.model.Y, ## lm object estimating Y
+                                pred, ## focal predictor, X (CANNOT accept multiple variables)
+                                modx) { ## moderator, only one at a time
+
+  ## extract mediator automatically from the model of M
+  m.name <- formula.tools::lhs.vars(formula(lm.model.M))
+
+  ## check mediator is indeed included in the model of Y
+  check <- !(m.name %in% formula.tools::rhs.vars(formula(lm.model.Y)))
+  if (isTRUE(check)) stop("lm.model.Y does not have proper mediator variable as in lm.model.M!")
+
+  resample <- dat[i,]
+  model.M.resample <- lm(formula(lm.model.M), data = resample)
+  model.Y.resample <- lm(formula(lm.model.Y), data = resample)
+
+  interact_term1 <- paste(pred, modx, sep = ":")
+  interact_term2 <- paste(modx, pred, sep = ":")
+
+  select <- c(interact_term1, interact_term2) %in% names(coef(lm.model.M))
+  interact_term <- c(interact_term1, interact_term2)[select]
+
+  a1 <- summary(model.M.resample)$coef[pred, 1]
+  a2 <- summary(model.M.resample)$coef[modx, 1]
+  a3 <- summary(model.M.resample)$coef[interact_term, 1]
+  b <- summary(model.Y.resample)$coef[m.name, 1]
+  c <- summary(model.Y.resample)$coef[pred, 1]
+
+  mod.val <- dat[, get(modx)]
+
+  ## effect decomposition ##
+  ## index of moderated mediation
+  index.modmed <- a3*b
+
+  ## conditional indirect effect at every docile of moderator values
+  ## plus any point of transition
+  mod.val <- seq(from = range(mod.val)[1], to = range(mod.val)[2])
+  critical.val <- jnt(lm.model.M, pred, modx)
+  mod.val <- sort(unique(c(mod.val, critical.val)))
+
+  ind.effect <- (a1 + mod.val*a3)*b
+  ## unconditional direct effect
+  dir.effect <- c
+
+  # return effect decomposition
+  return.vec <- c(index.modmed = index.modmed,
+                  ind.effect = ind.effect,
+                  dir.effect = dir.effect)
+  return(return.vec)
+}
+
+
+
