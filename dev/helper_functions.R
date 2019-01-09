@@ -305,38 +305,61 @@ get.boot.stats <- function(boot.out, type = "bca", ...) {
 }
 
 ## function to find JN point of transition
-jnt <- function(.lm, pred, modx, alpha=.05) {
-  require(stringi)
-  b1 = coef(.lm)[pred]
-  b3 = coef(.lm)[stri_startswith_fixed(names(coef(.lm)), paste0(pred,":")) | stri_endswith_fixed(names(coef(.lm)), paste0(":",pred))]
-  se_b1 = coef(summary(.lm))[pred, 2]
-  se_b3 = coef(summary(.lm))[stri_startswith_fixed(names(coef(.lm)), paste0(pred,":")) | stri_endswith_fixed(names(coef(.lm)), paste0(":",pred)), 2]
-  COV_b1b3 = vcov(.lm)[pred, stri_startswith_fixed(names(coef(.lm)), paste0(pred,":")) | stri_endswith_fixed(names(coef(.lm)), paste0(":",pred))]
-  t_crit = qt(1-alpha/2, .lm$df.residual)
-  # see Bauer & Curran, 2005
-  a = t_crit^2 * se_b3^2 - b3^2
-  b = 2 * (t_crit^2 * COV_b1b3 - b1 * b3)
-  c = t_crit^2 * se_b1^2 - b1^2
-  jn = c(
-    (-b - sqrt(b^2 - 4 * a * c)) / (2 * a),
-    (-b + sqrt(b^2 - 4 * a * c)) / (2 * a)
-  )
-  JN = sort(unname(jn))
-  JN = JN[JN>=min(.lm$model[,modx]) & JN<=max(.lm$model[,modx])]
-  JN
-}
+# jnt <- function(.lm, pred, modx, alpha=.05) {
+#   require(stringi)
+#   b1 = coef(.lm)[pred]
+#   b3 = coef(.lm)[stri_startswith_fixed(names(coef(.lm)), paste0(pred,":")) | stri_endswith_fixed(names(coef(.lm)), paste0(":",pred))]
+#   se_b1 = coef(summary(.lm))[pred, 2]
+#   se_b3 = coef(summary(.lm))[stri_startswith_fixed(names(coef(.lm)), paste0(pred,":")) | stri_endswith_fixed(names(coef(.lm)), paste0(":",pred)), 2]
+#   COV_b1b3 = vcov(.lm)[pred, stri_startswith_fixed(names(coef(.lm)), paste0(pred,":")) | stri_endswith_fixed(names(coef(.lm)), paste0(":",pred))]
+#   t_crit = qt(1-alpha/2, .lm$df.residual)
+#   # see Bauer & Curran, 2005
+#   a = t_crit^2 * se_b3^2 - b3^2
+#   b = 2 * (t_crit^2 * COV_b1b3 - b1 * b3)
+#   c = t_crit^2 * se_b1^2 - b1^2
+#   jn = c(
+#     (-b - sqrt(b^2 - 4 * a * c)) / (2 * a),
+#     (-b + sqrt(b^2 - 4 * a * c)) / (2 * a)
+#   )
+#   JN = sort(unname(jn))
+#   JN = JN[JN>=min(.lm$model[,modx]) & JN<=max(.lm$model[,modx])]
+#   JN
+# }
 
+## 'not in' function
+`%!in%` <- function (x, table) is.na(match(x, table, nomatch=NA_integer_))
+
+## helper for automatically create sequence of mod val
+select.modval <- function(dat, modx) {
+
+  ## 'dat' expects data.table format
+  ## 'modx' is the character of moderator in the model
+
+  mod.val <- dat[, get(modx)]
+  mod.val <- dat[, seq(from = range(mod.val)[1],
+                       to = range(mod.val)[2],
+                       ## automatically select 'by' arguments
+                       ## 100 percentile interval vs. 0.01
+                       by = min(0.01, diff(range(mod.val))/100))]
+  mod.val <- unique(round(mod.val, digits = 2))
+  mod.val
+}
 
 ## estimate conditional effects
 est.cond.indirect <- function(dat, ## data frame to pass for bootstrapping
-                                i, ## i = the index value for resample
-                                lm.model.M, ## lm object estimating M
-                                lm.model.Y, ## lm object estimating Y
-                                pred, ## focal predictor, X (CANNOT accept multiple variables)
-                                modx) { ## moderator, only one at a time
+                              i, ## i = the index value for resample
+                              lm.model.M, ## lm object estimating M
+                              lm.model.Y, ## lm object estimating Y
+                              pred, ## focal predictor, X (CANNOT accept multiple variables)
+                              med = NULL,
+                              modx) { ## moderator, only one at a time
 
+  if (is.null(med)) {
   ## extract mediator automatically from the model of M
-  m.name <- formula.tools::lhs.vars(formula(lm.model.M))
+    m.name <- formula.tools::lhs.vars(formula(lm.model.M))
+  } else {
+    m.name <- med
+  }
 
   ## check mediator is indeed included in the model of Y
   check <- !(m.name %in% formula.tools::rhs.vars(formula(lm.model.Y)))
@@ -356,7 +379,7 @@ est.cond.indirect <- function(dat, ## data frame to pass for bootstrapping
   a2 <- summary(model.M.resample)$coef[modx, 1]
   a3 <- summary(model.M.resample)$coef[interact_term, 1]
   b <- summary(model.Y.resample)$coef[m.name, 1]
-  c <- summary(model.Y.resample)$coef[pred, 1]
+  c1 <- summary(model.Y.resample)$coef[pred, 1]
 
   mod.val <- dat[, get(modx)]
 
@@ -364,22 +387,13 @@ est.cond.indirect <- function(dat, ## data frame to pass for bootstrapping
   ## index of moderated mediation
   index.modmed <- a3*b
 
-  ## conditional indirect effect at every docile of moderator values
-  ## plus any point of transition
-  mod.val <- seq(from = range(mod.val)[1], to = range(mod.val)[2])
-  critical.val <- jnt(lm.model.M, pred, modx)
-  mod.val <- sort(unique(c(mod.val, critical.val)))
-
+  ## conditional indirect effect at values of moderator
+  mod.val <- select.modval(dat, modx)
   ind.effect <- (a1 + mod.val*a3)*b
-  ## unconditional direct effect
-  dir.effect <- c
+  dir.effect <- c1
 
-  # return effect decomposition
   return.vec <- c(index.modmed = index.modmed,
                   ind.effect = ind.effect,
                   dir.effect = dir.effect)
   return(return.vec)
 }
-
-
-

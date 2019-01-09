@@ -166,10 +166,12 @@ summary(model.M1.int3)
 jtools::interact_plot(model.M1.int3, pred = "dangerous.disc.W1", modx = "alter.centr.eigen.W1")
 
 
-## interactions with safe.disc are NOT significant
-## for connected alters' eigenvector and indegree centrality (measured prior to each wave)
-
-
+## interactions with dangerous.disc.W1 are NOT significant for affective polarization
+model.M2.int1 <- lm(update.formula(model.M2, . ~ . + dangerous.disc.W1*ideo_str.W2), data = cleaned.data)
+summary(model.M2.int1)
+## yet marginally significant for safe discussion
+model.M2.int2 <- lm(update.formula(model.M2, . ~ . + safe.disc.W1*ideo_str.W2), data = cleaned.data)
+summary(model.M2.int1)
 
 ## predicting self-reported exposure to disagreement
 model.Y <- lm(update.formula(model.M1,
@@ -177,10 +179,34 @@ model.Y <- lm(update.formula(model.M1,
                + perceived.opinion.climate.W2 + affective.polarization.W2),
               data = cleaned.data); summary(model.Y)
 
+## Basic mediation models
 screenreg(list(model.M1, model.M2, model.Y),
-          custom.model.names = c("Prcvd Op Climate", "Affective pol", "Selfrep Dis"))
+          single.row = T, digits = 3, leading.zero = FALSE,
+          custom.model.names = c("M1: Prcvd Op Climate", "M2: Affective pol", "Y: Self-reptd Dis"),
+          custom.coef.names = c("(Intercept)", "In-prty msg Exp W1", "Out-prty msg Exp W1",
+                                "Age (in years)", "Female", "Education", "HH income",
+                                "Candidate Pref W2", "Ideo Strgth W2", "Interest W2",
+                                "Net size W2", "Internet News Use W2", "NP News Use W2",
+                                "TV News Use W2", "Prcvd Op Climate", "Affective pol"),
+          reorder.coef = c(2:3, 15:16, 8:14, 4:7, 1),
+          groups = list("Focal predictors" = 1:2, "Mediators" = 3:4,
+                        "Controls" = 5:11, "Demographics" = 12:15, "Intercept" = 16))
+
+## First stage moderation models
 screenreg(list(model.M1, model.M1.int1, model.M1.int2, model.M1.int3),
-          custom.model.names = c("Prcvd Op Climate", "Two-way I", "Two-way II", "Three-way"))
+          single.row = T, digits = 3, leading.zero = FALSE,
+          custom.model.names = c("Prcvd Op Climate", "Ideo Strgth", "Alter Indegree", "Alter Eigenvector"),
+          custom.coef.names = c("(Intercept)", "In-prty msg Exp W1", "Out-prty msg Exp W1",
+                                "Age (in years)", "Female", "Education", "HH income",
+                                "Candidate Pref W2", "Ideo Strgth W2", "Interest W2",
+                                "Net size W2", "Internet News Use W2", "NP News Use W2",
+                                "TV News Use W2",
+                                "Out-prty Exp X Ideo Strgth",
+                                "Alter Indegree W1", "Out-prty Exp X Indegree",
+                                "Alter Eigenvec W1", "Out-prty Exp X Eigen"),
+          reorder.coef = c(2:3, 9,15:19, 8,10:14, 4:7, 1),
+          groups = list("Focal predictors" = 1:2, "Interactions" = 3:8,
+                        "Controls" = 9:14, "Demographics" = 15:18, "Intercept" = 19))
 
 ## -------------------------------------------------------- ##
 ## Nonparametric bootstrap-based indirect effect inferences ##
@@ -197,7 +223,7 @@ boot.test1 <- boot(dat = cleaned.data, statistic = est.uncond.indirect,
                    R = 20000, parallel = "multicore", ncpus = 8,
                    lm.model.M = model.M1, lm.model.Y = model.Y,
                    pred = c("safe.disc.W1", "dangerous.disc.W1"))
-out.uncond <- get.boot.stats(boot.test1)
+out.uncond <- get.boot.stats(boot.test1, type = "perc")
 
 ## cf. when controlling for lagged effect of Y:
 model.Y1 <- lm(update.formula(model.Y, . ~ exp.disagr.online.prcpt.W2 + .),
@@ -210,82 +236,148 @@ boot.test1.lagged <- boot(dat = cleaned.data, statistic = est.uncond.indirect,
                    R = 20000, parallel = "multicore", ncpus = 8,
                    lm.model.M = model.M1, lm.model.Y = model.Y1,
                    pred = c("safe.disc.W1", "dangerous.disc.W1"))
-out.uncond.lagged <- get.boot.stats(boot.test1.lagged, conf = 0.90)
+out.uncond.lagged <- get.boot.stats(boot.test1.lagged,
+                                    type = "perc", conf = 0.90)
 
 
 
 
 ## estimate conditional indirect effect
-## as a function of ideological identification strength
+## as a function of moderators
+## using bcaboot packages
+require(bcaboot)
 est.cond.indirect
 
+## ideological identification strength
 set.seed(1234)
 boot.test2 <- boot(cleaned.data, statistic = est.cond.indirect,
                    R = 20000, parallel = "multicore", ncpus = 8,
                    lm.model.M = model.M1.int1, lm.model.Y = model.Y,
                    pred = "dangerous.disc.W1",
                    modx = "ideo_str.W2")
-out.cond2 <- get.boot.stats(boot.test2)
+out.cond1 <- get.boot.stats(boot.test2, type = "bca")
+out.cond1 <- cbind(var = rownames(out.cond1), out.cond1) %>% setDT(.)
 
-## plot conditional indirect effects
-mod.val <- cleaned.data[, quantile(ideo_str.W2, seq(from = 0, to = 1, by = 0.05))]
-critical.val <- jnt(model.M1.int1, "dangerous.disc.W1", "ideo_str.W2")
-mod.val <- sort(unique(c(mod.val, critical.val)))
-
-plot.cond.ind <- cbind(moderator = mod.val, out.cond2[-c(1, length(boot.test2$t0)),])
-require(data.table)
-setDT(plot.cond.ind)
-ggplot(plot.cond.ind, aes(x = moderator, y = coef)) +
-  geom_line() + geom_hline(yintercept = 0, color = "red", linetype = 2) +
-  geom_ribbon(aes(ymin = llci, ymax = ulci), alpha = 0.25) +
-  xlab("Moderator: Strengths of ideology") + ylab("theta") +
-  ggtitle("Conditional indirect effect of actual exposure to disagreeable discussants message")
-
+  ## plot conditional indirect effects
+  plot.cond.ind1 <- data.frame(
+    moderator = select.modval(cleaned.data, "ideo_str.W2"),
+    out.cond1[var %!in% c("index.modmed", "dir.effect"),]
+    ) %>% setDT(.)
+  ggplot(plot.cond.ind1, aes(x = moderator, y = coef)) + theme_bw() +
+    geom_line() + geom_hline(yintercept = 0, color = "red", linetype = 2) +
+    geom_ribbon(aes(ymin = llci, ymax = ulci), alpha = 0.25) +
+    geom_vline(xintercept = 0.52, color = "red", lty = 2) +
+    xlab("Moderator: Strengths of ideology") + ylab("theta") +
+    ggtitle("Conditional indirect effect of actual exposure to disagreeable discussants' messages")
 
 
-## cf
-cleaned.data[, Y := exp.disagr.online.prcpt.W3 - exp.disagr.online.prcpt.W2]
-cleaned.data[, M1 := perceived.opinion.climate.W3 - perceived.opinion.climate.W2]
-cleaned.data[, M2 := affective.polarization.W3 - affective.polarization.W2]
-cleaned.data[, X1 := dangerous.disc.W3 - dangerous.disc.W2]
-cleaned.data[, X2 := safe.disc.W3 - safe.disc.W2]
+## connected alters' indegree centrality --> significant with BCa...
+  set.seed(1234)
+  boot.test3 <- boot(cleaned.data, statistic = est.cond.indirect,
+                     R = 10000, parallel = "multicore", ncpus = 8,
+                     lm.model.M = model.M1.int2, lm.model.Y = model.Y,
+                     pred = "dangerous.disc.W1",
+                     modx = "alter.centr.indeg.W1")
+  out.cond2 <- get.boot.stats(boot.test3, type = "bca")
+  out.cond2 <- cbind(var = rownames(out.cond2), out.cond2) %>% setDT(.)
 
-model.M1 <- lm(M1 ~
-                 ## focal predictor
-                 X1 + X2 +
-                 ## discussion motivation
-                 consistency.motivation + understanding.motivation +
-                 ## demographic controls
-                 age.years + female + edu + household.income +
-                 ## political correlates
-                 canpref.W2 + ideo_str.W2 + pol.interest.W2 + ego.netsize.W2 +
-                 ## media exposure
-                 internet.news.use.W2 + newspaper.use.W2 + tv.news.use.W2
-               ,
-               data = cleaned.data); summary(model.M1)
+  ## plot conditional indirect effects
+  plot.cond.ind2 <- data.frame(
+    moderator = select.modval(cleaned.data, "alter.centr.indeg.W1"),
+    out.cond2[var %!in% c("index.modmed", "dir.effect"),]
+  ) %>% setDT(.)
+  ggplot(plot.cond.ind2, aes(x = moderator, y = coef)) + theme_bw() +
+    geom_line() + geom_hline(yintercept = 0, color = "red", linetype = 2) +
+    geom_ribbon(aes(ymin = llci, ymax = ulci), alpha = 0.25) +
+    #geom_vline(xintercept = 0.52, color = "red", lty = 2) +
+    xlab("Moderator: Connected alters' indegree centrality") + ylab("theta") +
+    ggtitle("Conditional indirect effect of actual exposure to disagreeable discussants' messages")
 
-model.M2 <- lm(update.formula(model.M1, M2 ~ .),
-               data = cleaned.data); summary(model.M2)
 
-## individual's ideology str significantly interact with dangerous.disc
-model.M1.int1 <- lm(update.formula(model.M1, . ~ . + X1*understanding.motivation), data = cleaned.data)
-summary(model.M1.int1)
-jtools::interact_plot(model.M1.int1, pred = "X1", modx = "understanding.motivation")
+  ## connected alters' eigenvector centrality --> significant with BCa...
+  set.seed(1234)
+  boot.test4 <- boot(cleaned.data, statistic = est.cond.indirect,
+                     R = 20000, parallel = "multicore", ncpus = 8,
+                     lm.model.M = model.M1.int3, lm.model.Y = model.Y,
+                     pred = "dangerous.disc.W1",
+                     modx = "alter.centr.eigen.W1")
+  out.cond3 <- get.boot.stats(boot.test4, type = "bca")
+  out.cond3 <- cbind(var = rownames(out.cond3), out.cond3) %>% setDT(.)
 
-model.Y <- lm(Y ~
-                ## focal predictor
-                X1 + X2 +
-                ## discussion motivation
-                consistency.motivation + understanding.motivation +
-                ## demographic controls
-                age.years + female + edu + household.income +
-                ## political correlates
-                canpref.W2 + ideo_str.W2 + pol.interest.W2 + ego.netsize.W2 +
-                ## media exposure
-                internet.news.use.W2 + newspaper.use.W2 + tv.news.use.W2 +
-                ## mediator
-                M1 + M2
-              ,
-              data = cleaned.data)
-model.Y %>% summary(.)
+  ## plot conditional indirect effects
+  plot.cond.ind3 <- data.frame(
+    moderator = select.modval(cleaned.data, "alter.centr.eigen.W1"),
+    out.cond3[var %!in% c("index.modmed", "dir.effect"),]
+  ) %>% setDT(.)
+  ggplot(plot.cond.ind3, aes(x = moderator, y = coef)) + theme_bw() +
+    geom_line() + geom_hline(yintercept = 0, color = "red", linetype = 2) +
+    geom_ribbon(aes(ymin = llci, ymax = ulci), alpha = 0.25) +
+    #geom_vline(xintercept = 0.52, color = "red", lty = 2) +
+    xlab("Moderator: Connected alters' eigenvector centrality") + ylab("theta") +
+    ggtitle("Conditional indirect effect of actual exposure to disagreeable discussants' messages")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## cf. differencing methods
+  # cleaned.data[, Y := exp.disagr.online.prcpt.W3 - exp.disagr.online.prcpt.W2]
+  # cleaned.data[, M1 := perceived.opinion.climate.W3 - perceived.opinion.climate.W2]
+  # cleaned.data[, M2 := affective.polarization.W3 - affective.polarization.W2]
+  # cleaned.data[, X1 := dangerous.disc.W3 - dangerous.disc.W2]
+  # cleaned.data[, X2 := safe.disc.W3 - safe.disc.W2]
+  #
+  # model.M1 <- lm(M1 ~
+  #                  ## focal predictor
+  #                  X1 + X2 +
+  #                  ## discussion motivation
+  #                  consistency.motivation + understanding.motivation +
+  #                  ## demographic controls
+  #                  age.years + female + edu + household.income +
+  #                  ## political correlates
+  #                  canpref.W2 + ideo_str.W2 + pol.interest.W2 + ego.netsize.W2 +
+  #                  ## media exposure
+  #                  internet.news.use.W2 + newspaper.use.W2 + tv.news.use.W2
+  #                ,
+  #                data = cleaned.data); summary(model.M1)
+  #
+  # model.M2 <- lm(update.formula(model.M1, M2 ~ .),
+  #                data = cleaned.data); summary(model.M2)
+  #
+  # ## individual's ideology str significantly interact with dangerous.disc
+  # model.M1.int1 <- lm(update.formula(model.M1, . ~ . + X1*understanding.motivation), data = cleaned.data)
+  # summary(model.M1.int1)
+  # jtools::interact_plot(model.M1.int1, pred = "X1", modx = "understanding.motivation")
+  #
+  # model.Y <- lm(Y ~
+  #                 ## focal predictor
+  #                 X1 + X2 +
+  #                 ## discussion motivation
+  #                 consistency.motivation + understanding.motivation +
+  #                 ## demographic controls
+  #                 age.years + female + edu + household.income +
+  #                 ## political correlates
+  #                 canpref.W2 + ideo_str.W2 + pol.interest.W2 + ego.netsize.W2 +
+  #                 ## media exposure
+  #                 internet.news.use.W2 + newspaper.use.W2 + tv.news.use.W2 +
+  #                 ## mediator
+  #                 M1 + M2
+  #               ,
+  #               data = cleaned.data)
+  # model.Y %>% summary(.)
 
