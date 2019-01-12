@@ -75,16 +75,19 @@ diff.perm.test <- function(data, var1, var2,
   var2 <- data[, get(var2)]
 
   diff.obs <- (var1 - var2)
-  diff.obs.mean <- mean(diff.obs)
+  diff.obs.m <- mean(diff.obs)
 
+  ## functions taken from wPerm
   perm <- sort(sapply(seq_len(rep), function(x) {
-    var2.resample <- sample(var2, size = length(var2), replace = FALSE)
-    diff.perm <- (var1 - var2.resample)
+    b <- rbinom(length(var2), 1, 0.5)
+    var1.resample <- b * var1 + (1 - b) * var2
+    var2.resample <- (1 - b) * var1 + b * var2
+    diff.perm <- (var1.resample - var2.resample)
     mean(diff.perm)
   }))
 
   CIs <- quantile(perm, c(alpha1, alpha2))
-  out <- c(diff.obs.mean, CIs[1], CIs[2])
+  out <- c(diff.obs.m, CIs[1], CIs[2])
   names(out) <- c("diff.obs", paste('llci', alpha1, sep = "."), paste('ulci', alpha2, sep = "."))
 
   return(out)
@@ -119,98 +122,75 @@ add.demographics <- function(data.to.process) {
   data.copy
 }
 
+## ego centrality function
 
 ## a set of functions to get sum of connected alters' centrality
 ## in calculating sum of <<alters'>> centrality scores,
 ## measures are  weighted by the number of ego's choice (exposure)
-get.alter.eigen.centr <- function() {
+get.alter.eigen.centr <- function(net_list) {
 
-  ## check if "date.range" and "g" are present in the GlobalEnv
-  if (!("date.range" %in% ls(envir = .GlobalEnv))) stop("date.range should be present in the GlobalEnv!")
-  if (!("g" %in% ls(envir = .GlobalEnv))) stop("network data ('g') should be present in the GlobalEnv!")
-  date.range <- get("date.range", envir = .GlobalEnv)
-  g <- get("g", envir = .GlobalEnv)
-
-  centr.eigen <- lapply(seq_len(length(date.range)), function(i) {
+  net_length <- length(net_list)
+  centr.eigen <- lapply(seq_len(net_length), function(i) {
 
     ## extract daily exposure network
     ## make tempt network as matrix object through igraph conversion
-    net.day.tempt <- net.day <- g[[i]] %>%
+    net_ego <- net_list[[i]]
+    net.tempt <- net_list[[i]] %>%
       igraph::graph_from_adjacency_matrix(., mode = "directed", weighted = NULL)
 
-    ## for every ego, remove ego from the network and
-    ## and calculate indegree of rest of alters
-    ## this gives indegree of alters excluding ego's own connection
-    alter.centr.eigen <- sapply(seq_len(341), function(v) {
+    centr.eigen <- igraph::centr_eigen(net.tempt, directed = T, normalized = T, scale = T)
+    centr.eigen <- centr.eigen$vector
 
-      tempt <- delete_vertices(net.day.tempt, v)
-      centr.eigen <- igraph::centr_eigen(tempt, directed = T)
-      centr.eigen <- centr.eigen$vector
+    ## bind with ego's own choice, and make a cross-product
+    centr.eigen <- as.matrix(net_ego) %*% centr.eigen
 
-      index <- c(v, setdiff(1:341, v))
-      centr.eigen <- c(0, centr.eigen)[index]
-
-      ## bind with ego's own choice, and make a cross-product
-      alter.centr.eigen <- net.day[v,] %*% centr.eigen
-      alter.centr.eigen <- sum(alter.centr.eigen)
-      alter.centr.eigen
-    })
-
-    centr.eigen <- scale(alter.centr.eigen)[,1]
-    alter.centr.eigen <- cbind(id = 1:341, alter.centr.eigen = centr.eigen, day = i)
+    #alter.centr.eigen <- scale(alter.centr.eigen)[,1]
+    alter.centr.eigen <- cbind(id = 1:341,
+                               alter.centr.eigen = as.vector(centr.eigen),
+                               indices = i)
     alter.centr.eigen
   })
 
-  alter.centr.eigen <- do.call(rbind, centr.eigen)
+  centr.eigen <- do.call(rbind, centr.eigen)
   require(data.table)
-  alter.centr.eigen <- setDT(as.data.frame(alter.centr.eigen))
-  alter.centr.eigen
+  centr.eigen <- setDT(as.data.frame(centr.eigen))
+  centr.eigen
 }
 
 ## ego's own connection to alter is not considered in
 ## deriving the measure
-get.alter.indegree.centr <- function() {
-
-  ## check if "date.range" and "g" are present in the GlobalEnv
-  if (!("date.range" %in% ls(envir = .GlobalEnv))) stop("date.range should be present in the GlobalEnv!")
-  if (!("g" %in% ls(envir = .GlobalEnv))) stop("network data ('g') should be present in the GlobalEnv!")
-  date.range <- get("date.range", envir = .GlobalEnv)
-  g <- get("g", envir = .GlobalEnv)
-
-  alter.centr <- lapply(seq_len(length(date.range)), function(i) {
-
-    ## extract daily exposure network
-    ## make tempt network as matrix object through igraph conversion
-    net.day.tempt <- net.day <- g[[i]] %>%
-      igraph::graph_from_adjacency_matrix(., mode = "directed", weighted = NULL)
-
-    ## for every ego, remove ego from the network and
-    ## and calculate indegree of rest of alters
-    ## this gives indegree of alters exclusing ego's own connection
-    alter.centr.ind <- sapply(seq_len(341), function(v) {
-
-      tempt <- delete_vertices(net.day.tempt, v)
-      centr.ind <- igraph::centr_degree(tempt, mode = "in", loops = F, normalized = F)
-      centr.ind <- centr.ind$res
-
-      index <- c(v, setdiff(1:341, v))
-      centr.ind <- c(0, centr.ind)[index]
-
-      ## bind with ego's own choice, and make a cross-product
-      alter.centr.ind <- net.day[v,] %*% centr.ind
-      alter.centr.ind <- sum(alter.centr.ind)
-      alter.centr.ind
-    })
-    alter.centr.ind <- scale(alter.centr.ind)[,1]
-    alter.centr.ind <- cbind(id = 1:341, alter.centr.ind = alter.centr.ind, day = i)
-    alter.centr.ind
-  })
-
-  alter.centr.ind <- do.call(rbind, alter.centr)
-  require(data.table)
-  alter.centr.ind <- setDT(as.data.frame(alter.centr.ind))
-  alter.centr.ind
-}
+# get.alter.indegree.centr <- function(net_list) {
+#
+#   net_length <- length(net_list)
+#   alter.centr <- lapply(seq_len(net_length), function(i) {
+#
+#     ## extract daily exposure network
+#     net.tempt <- net_ego <- net_list[[i]] %>% as.matrix(.)
+#
+#     ## for every ego, remove ego from the network and
+#     ## and calculate indegree of rest of alters
+#     ## this gives indegree of alters exclusing ego's own connection
+#     alter.centr.ind <- sapply(seq_len(341), function(v) {
+#
+#       centr.ind <- net.tempt[-v,] %>% apply(., 2, sum)
+#
+#       ## bind with ego's own choice, and make a cross-product
+#       alter.centr.ind <- net_ego[v,] %*% centr.ind
+#       alter.centr.ind <- mean(alter.centr.ind)
+#       alter.centr.ind
+#     })
+#     #alter.centr.ind <- scale(alter.centr.ind)[,1]
+#     alter.centr.ind <- cbind(id = 1:341,
+#                              alter.centr.ind = alter.centr.ind,
+#                              indices = i)
+#     alter.centr.ind
+#   })
+#
+#   alter.centr.ind <- do.call(rbind, alter.centr)
+#   require(data.table)
+#   alter.centr.ind <- setDT(as.data.frame(alter.centr.ind))
+#   alter.centr.ind
+# }
 
 
 ## ego's network size
@@ -242,6 +222,14 @@ get.ego.netsize <- function() {
 ## --------------------- ##
 ## 2. Analysis functions ##
 ## --------------------- ##
+
+## print standardized beta
+require(sjstats)
+std.lm <- function(lm.model) {
+  sjstats::std_beta(lm.model,  type = "std2")
+}
+
+
 
 require(formula.tools)
 est.uncond.indirect <- function(dat, ## data frame to pass for bootstrapping

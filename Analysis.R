@@ -47,50 +47,63 @@ require(plotROC)
 ## ----------------------- ##
 
 
-cleaned.data[, cor(dangerous.disc.W2, exp.disagr.offline.prcpt.W2)]
-bivariate.perm.test(cleaned.data, "dangerous.disc.W2", "exp.disagr.offline.prcpt.W2")
-#         obs  llci.0.025  ulci.0.975
-# -0.04797520  -0.1017732  0.1072070
 # make the rounded percentage and rerun the correlation does not change the results!
 cleaned.data[, dangerous.disc.W2.prop := (dangerous.disc.W2 %>% round(., digits = 2))*100]
 bivariate.perm.test(cleaned.data, "dangerous.disc.W2.prop", "exp.disagr.offline.prcpt.W2")
+cleaned.data[, dangerous.disc.W2.sum.prop := (dangerous.disc.W2.sum %>%
+                                                round(., digits = 2))*100]
+bivariate.perm.test(cleaned.data, "dangerous.disc.W2.sum.prop", "exp.disagr.offline.prcpt.W2")
 
 cleaned.data[, cor(dangerous.disc.W2.prop, exp.disagr.online.prcpt.W2)]
 bivariate.perm.test(cleaned.data, "dangerous.disc.W2.prop", "exp.disagr.online.prcpt.W2")
 # obs.minus.perm llci.0.025 ulci.0.975
 #      0.2851594  0.1758708  0.3888837
+cleaned.data[, cor(dangerous.disc.W2.sum.prop, exp.disagr.online.prcpt.W2)]
+bivariate.perm.test(cleaned.data, "dangerous.disc.W2.sum.prop", "exp.disagr.online.prcpt.W2")
+# obs.minus.perm     llci.0.025     ulci.0.975
+#      0.2582314      0.1599817      0.3656424
 
 ## create differences between perception and behavioral measures
 ## (+) values indicate the overestimation, and (-) means underestimation
 cleaned.data[, diff.exp.disagree.W2 := exp.disagr.online.prcpt.W2 - dangerous.disc.W2.prop]
 cleaned.data[, summary(diff.exp.disagree.W2)]
+cleaned.data[, diff.exp.disagree.W2.sum :=
+               exp.disagr.online.prcpt.W2 - dangerous.disc.W2.sum.prop]
+cleaned.data[, summary(diff.exp.disagree.W2.sum)]
+
 
 ## permutation test indicates that the difference between
 ## perception and objective behavior is significantly differ,
 ## in a way that people tend to overestimate the exposure to differences
 diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W2", "dangerous.disc.W2.prop", rep = 20000)
+diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W2", "dangerous.disc.W2.sum.prop", rep = 20000)
 
 
-cleaned.data[, cor(dangerous.disc.W3, exp.disagr.offline.prcpt.W3)]
-bivariate.perm.test(cleaned.data, "dangerous.disc.W3", "exp.disagr.offline.prcpt.W3")
-# obs.minus.perm    llci.0.025   ulci.0.975
-#     0.03105019   -0.06974810   0.14456759
 
 cleaned.data[, cor(dangerous.disc.W3, exp.disagr.online.prcpt.W3)]
 bivariate.perm.test(cleaned.data, "dangerous.disc.W3", "exp.disagr.online.prcpt.W3")
 # obs.minus.perm     llci.0.025     ulci.0.975
 #      0.2958441      0.1926712      0.4104359
+cleaned.data[, cor(dangerous.disc.W3.sum, exp.disagr.online.prcpt.W3)]
+bivariate.perm.test(cleaned.data, "dangerous.disc.W3.sum", "exp.disagr.online.prcpt.W3")
+# obs.minus.perm     llci.0.025     ulci.0.975
+#      0.3624799      0.2601810      0.4709605
 
 ## create differences between perception and behavioral measures
 ## (+) values indicate the overestimation, and (-) means underestimation
 cleaned.data[, dangerous.disc.W3.prop := (dangerous.disc.W3 %>% round(., digits = 2))*100]
+cleaned.data[, dangerous.disc.W3.sum.prop := (dangerous.disc.W3.sum %>% round(., digits = 2))*100]
 cleaned.data[, diff.exp.disagree.W3 := exp.disagr.online.prcpt.W3 - dangerous.disc.W3.prop]
 cleaned.data[, summary(diff.exp.disagree.W3)]
+cleaned.data[, diff.exp.disagree.W3.sum :=
+               exp.disagr.online.prcpt.W3 - dangerous.disc.W3.sum.prop]
+cleaned.data[, summary(diff.exp.disagree.W3.sum)]
 
 ## permutation test indicates that the difference between
 ## perception and objective behavior is significantly differ,
 ## in a way that people tend to overestimate the exposure to differences
 diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W3", "dangerous.disc.W3.prop", rep = 20000)
+diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W3", "dangerous.disc.W3.sum.prop", rep = 20000)
 
 ## make figures
 qq.out2 <- with(cleaned.data,
@@ -129,18 +142,23 @@ qq2 + qq3 + plot_layout(nrow = 1)
 ## Predicting perceived opinion climates ##
 ## ------------------------------------- ##
 
+cleaned.data[, log.raw_sum.W1.wavesum := log(raw_sum.W1.wavesum + 1)]
+
 ## model predicting perceived opinion climate
 model.M1 <- lm(perceived.opinion.climate.W2 ~
                 ## focal predictor
-                safe.disc.W1 + dangerous.disc.W1 +
+                 safe.disc.W1 +
+                 dangerous.disc.W1 +
+                 log.raw_sum.W1.wavesum +
                  ## discussion motivation
+                 discussion.norm.W2 +
                  ## consistency.motivation + understanding.motivation +
                  ## demographic controls
                  age.years + female + edu + household.income +
                  ## political correlates
                  canpref.W2 + ideo_str.W2 + pol.interest.W2 + ego.netsize.W2 +
                  ## media exposure
-                 internet.news.use.W2 + newspaper.use.W2 + tv.news.use.W2
+                 media.exposure.W2
               ,
               data = cleaned.data); summary(model.M1)
 
@@ -153,25 +171,40 @@ model.M1.int1 <- lm(update.formula(model.M1, . ~ . + dangerous.disc.W1*ideo_str.
 summary(model.M1.int1)
 jtools::interact_plot(model.M1.int1, pred = "dangerous.disc.W1", modx = "ideo_str.W2")
 
-## connected alters' eigenvector and indegree centrality (measured prior to each wave)
-## also significantly interact with dangerous.disc
-model.M1.int2 <- lm(
-  update.formula(model.M1, . ~ . + dangerous.disc.W1*alter.centr.indeg.W1), data = cleaned.data)
+model.M1.int2 <- lm(update.formula(model.M1, . ~ . + safe.disc.W1*ideo_str.W2), data = cleaned.data)
 summary(model.M1.int2)
-jtools::interact_plot(model.M1.int2, pred = "dangerous.disc.W1", modx = "alter.centr.indeg.W1")
 
-model.M1.int3 <- lm(
-  update.formula(model.M1, . ~ . + dangerous.disc.W1*alter.centr.eigen.W1), data = cleaned.data)
+
+model.M2.int1 <- lm(
+  update.formula(model.M2, . ~ . + dangerous.disc.W1*ideo_str.W2), data = cleaned.data)
+summary(model.M2.int1)
+model.M2.int2 <- lm(
+  update.formula(model.M2, . ~ . + safe.disc.W1*ideo_str.W2), data = cleaned.data)
+summary(model.M2.int2)
+jtools::interact_plot(model.M2.int2, pred = "safe.disc.W1", modx = "ideo_str.W2")
+
+
+
+
+
+
+
+
+
+
+
+
+model.M1.int3 <- lm(update.formula(model.M1, . ~ . +
+                                     dangerous.disc.W1*ideo.W2 -
+                                     canpref.W2 - ideo_str.W2), data = cleaned.data)
 summary(model.M1.int3)
-jtools::interact_plot(model.M1.int3, pred = "dangerous.disc.W1", modx = "alter.centr.eigen.W1")
+jtools::interact_plot(model.M1.int3, pred = "dangerous.disc.W1", modx = "ideo.W2")
 
 
-## interactions with dangerous.disc.W1 are NOT significant for affective polarization
-model.M2.int1 <- lm(update.formula(model.M2, . ~ . + dangerous.disc.W1*ideo_str.W2), data = cleaned.data)
-summary(model.M2.int1)
-## yet marginally significant for safe discussion
-model.M2.int2 <- lm(update.formula(model.M2, . ~ . + safe.disc.W1*ideo_str.W2), data = cleaned.data)
-summary(model.M2.int1)
+
+
+
+
 
 ## predicting self-reported exposure to disagreement
 model.Y <- lm(update.formula(model.M1,

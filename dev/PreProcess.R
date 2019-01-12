@@ -85,35 +85,89 @@ dat[, canpref1.imputed := canpref1]
 dat[is.na(canpref1), canpref1.imputed := car::recode(kv2, "1 = 0; 2 = 1; else = 2")]
 dat[, table(canpref1, canpref1.imputed, exclude = NULL)]
 
-## calculate the amount of exposure
+## calculate the amount of exposure -- daily average approach
+## wave 2 is from 12/11~13
+## and we take the dates between first day and the 18th day (until 10th)
+## as the wave 1 log measure, 19th to 21st day (12/11~13) as W2,
+## and the rest of the days as W3 log measures
+
 exp.dis.daily <-
   lapply(seq_len(length(date.range)),
          function(i) {
-            if (i <= 7) {
-              out <- cal.exposure.disagree(net = g[[i]],
-                      canpref = dat$canpref1.imputed, prop = TRUE)
-              out <- cbind(id = 1:341, out, day = i)
-              } else if (i <= 21) {
-                out <- cal.exposure.disagree(net = g[[i]],
-                        canpref = dat$canpref2, prop = TRUE)
-                out <- cbind(id = 1:341, out, day = i)
-                } else {
-                  out <- cal.exposure.disagree(net = g[[i]],
-                            canpref = dat$canpref3, prop = TRUE)
-                  out <- cbind(id = 1:341, out, day = i)
-                  }
+           if (i %in% c(1:18)) {
+             canpref_i <- dat$canpref1.imputed
+           } else if (i %in% c(19:21)) {
+             canpref_i <- dat$canpref2
+           } else {
+             canpref_i = dat$canpref3
+           }
+
+    out <- cal.exposure.disagree(net = g[[i]], canpref = canpref_i, prop = TRUE)
+    out_sum <- cal.exposure.disagree(net = g[[i]], canpref = canpref_i, prop = FALSE) %>%
+      apply(., 1, sum)
+    out <- cbind(id = 1:341, out, raw_sum = out_sum, day = i)
+
   return(out)
  })
 
 exp.dis.daily <- setDT(as.data.frame(do.call(rbind, exp.dis.daily)))
 
-## until W1
-cleaned.data <- exp.dis.daily[day <= 7, .(safe.disc.W1 = mean(safe.disc),
+
+## calculate the amount of exposure -- sum over entire period approach
+## make a network objects
+g3 <- list()
+for (j in 1:3) {
+  if (j == 1) i <- c(1:18)
+  if (j == 2) i <- c(19:21)
+  if (j == 3) i <- c(22:27)
+
+  g3[[j]] <- net[reading.date %in% date.range[i],]
+  g3[[j]] <- data.frame(g3[[j]][,2], g3[[j]][,3]) ## 2 == reader.id, 3 == poster.id
+  g3[[j]] <- as.matrix(g3[[j]])
+  g3[[j]] <- igraph::graph.edgelist(g3[[j]], directed = TRUE)
+  g3[[j]] <- igraph::get.adjacency(g3[[j]], sparse = T)
+}
+
+exp.dis.daily2 <-
+  lapply(seq_len(length(g3)),
+         function(j) {
+  if (j == 1) {
+      canpref_j <- dat$canpref1.imputed
+    } else if (j == 2) {
+      canpref_j <- dat$canpref2
+    } else {
+      canpref_j = dat$canpref3
+    }
+
+    out <- cal.exposure.disagree(net = g3[[j]], canpref = canpref_j, prop = TRUE)
+    out_sum <- cal.exposure.disagree(net = g3[[j]], canpref = canpref_j, prop = FALSE) %>%
+      apply(., 1, sum)
+    out <- cbind(id = 1:341, out, raw_sum = out_sum, wave = j)
+    return(out)
+  })
+
+exp.dis.daily2 <- setDT(as.data.frame(do.call(rbind, exp.dis.daily2)))
+
+
+
+
+
+
+
+
+
+## W1
+cleaned.data <- exp.dis.daily[day <= 18, .(safe.disc.W1 = mean(safe.disc),
                                    dangerous.disc.W1 = mean(dangerous.disc)), by = id] %>%
   cbind(., exp.disagr.offline.prcpt.W1 = dat$pv323)
 
-cleaned.data[, cor(dangerous.disc.W1, exp.disagr.offline.prcpt.W1)]
+cleaned.data[, dangerous.disc.W1.wavesum := exp.dis.daily2[wave == 1, dangerous.disc]]
+cleaned.data[, safe.disc.W1.wavesum := exp.dis.daily2[wave == 1, safe.disc]]
+cleaned.data[, raw_sum.W1.wavesum := exp.dis.daily2[wave == 1, raw_sum]]
 
+## check the measures
+cleaned.data[, cor(dangerous.disc.W1, exp.disagr.offline.prcpt.W1)]
+cleaned.data[, cor(dangerous.disc.W1.wavesum, exp.disagr.offline.prcpt.W1)]
 
 
 ## during W2
@@ -124,12 +178,16 @@ dat[canpref2 == 1, W2.disagree.online.perception := W2.disagree.for.liberal]
 dat[canpref2 == 0, W2.disagree.online.perception := W2.disagree.for.conservative]
 
 cleaned.data <- cleaned.data %>% merge(.,
-                exp.dis.daily[(day <= 21 & day > 7),
+                exp.dis.daily[day %in% c(19:21),
                               .(safe.disc.W2 = mean(safe.disc),
                                 dangerous.disc.W2 = mean(dangerous.disc)), by = id] %>%
                  cbind(., exp.disagr.offline.prcpt.W2 = dat$kv218) %>%
                  cbind(., exp.disagr.online.prcpt.W2 = dat$W2.disagree.online.perception),
                  by = "id")
+
+cleaned.data[, dangerous.disc.W2.wavesum := exp.dis.daily2[wave == 2, dangerous.disc]]
+cleaned.data[, safe.disc.W2.wavesum := exp.dis.daily2[wave == 2, safe.disc]]
+cleaned.data[, raw_sum.W2.wavesum := exp.dis.daily2[wave == 2, raw_sum]]
 
 ## during W3
 dat[, W3.disagree.for.liberal := rowSums(.SD), .SDcols = c("hv116", "hv117")]
@@ -145,43 +203,44 @@ cleaned.data <- cleaned.data %>% merge(.,
                 cbind(., exp.disagr.online.prcpt.W3 = dat$W3.disagree.online.perception),
                 by = "id")
 
+cleaned.data[, dangerous.disc.W3.wavesum := exp.dis.daily2[wave == 3, dangerous.disc]]
+cleaned.data[, safe.disc.W3.wavesum := exp.dis.daily2[wave == 3, safe.disc]]
+cleaned.data[, raw_sum.W3.wavesum := exp.dis.daily2[wave == 3, raw_sum]]
+
 
 ## get ego's network size
 ego.netsize <- get.ego.netsize()
 cleaned.data[, ego.netsize.W1 :=
-               ego.netsize[day %in% c(1:7),
+               ego.netsize[day %in% c(1:18),
                .(ego.netsize = mean(netsize)), by = id][, ego.netsize]]
 cleaned.data[, ego.netsize.W2 :=
-               ego.netsize[day %in% c(8:20),
+               ego.netsize[day %in% c(19:21),
                .(ego.netsize = mean(netsize)), by = id][, ego.netsize]]
 cleaned.data[, ego.netsize.W3 :=
-               ego.netsize[day %in% c(21:27),
+               ego.netsize[day %in% c(22:27),
                .(ego.netsize = mean(netsize)), by = id][, ego.netsize]]
 
 
 ## get connected alters' eigenvector centrality
-centr.eigen <- get.alter.eigen.centr()
+library("scales")
+centr.eigen <- get.alter.eigen.centr(g)
 cleaned.data[, alter.centr.eigen.W1 :=
-               centr.eigen[day %in% c(1:7),
-               .(alter.centr.eigen = mean(alter.centr.eigen)), by = id][, alter.centr.eigen]]
-cleaned.data[, alter.centr.eigen.W2 :=
-               centr.eigen[day %in% c(8:20),
-               .(alter.centr.eigen = mean(alter.centr.eigen)), by = id][, alter.centr.eigen]]
-cleaned.data[, alter.centr.eigen.W3 :=
-               centr.eigen[day %in% c(21:27),
-               .(alter.centr.eigen = mean(alter.centr.eigen)), by = id][, alter.centr.eigen]]
+               centr.eigen[indices %in% c(1:18),
+               .(alter.centr.eigen = mean(alter.centr.eigen)),
+               by = id][, rescale(alter.centr.eigen)]
+             ]
 
-## get connected alters' indegree centrality
-centr.indeg <- get.alter.indegree.centr()
-cleaned.data[, alter.centr.indeg.W1 :=
-               centr.indeg[day %in% c(1:7),
-               .(alter.centr.ind = mean(alter.centr.ind)), by = id][, alter.centr.ind]]
-cleaned.data[, alter.centr.indeg.W2 :=
-               centr.indeg[day %in% c(8:20),
-               .(alter.centr.ind = mean(alter.centr.ind)), by = id][, alter.centr.ind]]
-cleaned.data[, alter.centr.indeg.W3 :=
-               centr.indeg[day %in% c(21:27),
-               .(alter.centr.ind = mean(alter.centr.ind)), by = id][, alter.centr.ind]]
+cleaned.data[, alter.centr.eigen.W2 :=
+               centr.eigen[indices %in% c(19:21),
+                           .(alter.centr.eigen = mean(alter.centr.eigen)),
+                           by = id][,rescale(alter.centr.eigen)]
+             ]
+
+cleaned.data[, alter.centr.eigen.W3 :=
+               centr.eigen[indices %in% c(21:27),
+                           .(alter.centr.eigen = mean(alter.centr.eigen)),
+                           by = id][, rescale(alter.centr.eigen)]
+             ]
 
 
 ## add a series of correlates to data.frame
@@ -246,6 +305,16 @@ cleaned.data[, alter.centr.indeg.W3 :=
     cleaned.data[, newspaper.use.W2 := dat[, (60*kv195 + kv196)/60]]
     cleaned.data[, tv.news.use.W2 := dat[, (60*kv199 + kv200)/60]]
 
+    cleaned.data[, .(internet.news.use.W2, newspaper.use.W2, tv.news.use.W2)][,
+                    psych::alpha(as.data.frame(.SD), check.keys = T),
+                    .SDcols = c("internet.news.use.W2",
+                                "newspaper.use.W2",
+                                "tv.news.use.W2")]
+    ## alpha is 0.73, therefore create a summary scale
+    cleaned.data[, media.exposure.W2 := rowMeans(as.data.frame(.SD)),
+                   .SDcols = c("internet.news.use.W2", "newspaper.use.W2",
+                             "tv.news.use.W2")]
+
   ## negativity.bias
   dat[, kv93:kv97][, psych::alpha(as.data.frame(.SD), check.keys = T)]
   cleaned.data[, outgroup.negativity.bias.W2 := rowMeans(
@@ -264,6 +333,11 @@ cleaned.data[, alter.centr.indeg.W3 :=
   ## affective polarization (ingroup - outgroup)
   cleaned.data[, affective.polarization.W2 := ingroup.favoritism.bias.W2 - outgroup.negativity.bias.W2]
   cleaned.data[, affective.polarization.W3 := ingroup.favoritism.bias.W3 - outgroup.negativity.bias.W3]
+
+  ## endorsement of discussion norm
+  dat[, kv118:kv122][, psych::alpha(as.data.frame(.SD), check.keys = T)]
+  cleaned.data[, discussion.norm.W2 := rowMeans(
+    dat[, .SD, .SDcols = c("kv118", "kv119", "kv120", "kv121", "kv122")])]
 
 ## check the over-time change of key measurements
   long.data <- melt(cleaned.data,
