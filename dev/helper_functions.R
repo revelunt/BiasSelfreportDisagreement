@@ -236,10 +236,11 @@ est.uncond.indirect <- function(dat, ## data frame to pass for bootstrapping
                                 i, ## i = the index value for resample
                                 lm.model.M, ## lm object estimating M
                                 lm.model.Y, ## lm object estimating Y
-                                pred) { ## focal predictor, X (can accept multiple variables)
+                                pred, ## X (can accept multiple variables)
+                                m.name = NULL) {  ## mediator name
 
-  ## extract mediator automatically from the model of M
-  m.name <- formula.tools::lhs.vars(formula(lm.model.M))
+  ## extract mediator automatically from the model of M if not provided
+  if (is.null(m.name)) m.name <- formula.tools::lhs.vars(formula(lm.model.M))
 
   ## check mediator is indeed included in the model of Y
   check <- !(m.name %in% formula.tools::rhs.vars(formula(lm.model.Y)))
