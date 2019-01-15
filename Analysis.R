@@ -9,134 +9,151 @@ require(ggplot2)
 require(jtools)
 require(plotROC)
 
-## we use 'cleaned.data' and 'long.data' for the rest of the analysis
+## we use 'cleaned.data' for the rest of the analysis
 # > colnames(cleaned.data)
 # [1] "id"                           "safe.disc.W1"
 # [3] "dangerous.disc.W1"            "exp.disagr.offline.prcpt.W1"
-# [5] "safe.disc.W2"                 "dangerous.disc.W2"
-# [7] "exp.disagr.offline.prcpt.W2"  "exp.disagr.online.prcpt.W2"
-# [9] "diff.exp.disagree.W2"         "safe.disc.W3"
-# [11] "dangerous.disc.W3"            "exp.disagr.offline.prcpt.W3"
-# [13] "exp.disagr.online.prcpt.W3"   "diff.exp.disagree.W3"
-# [15] "ego.netsize.W1"               "ego.netsize.W2"
-# [17] "ego.netsize.W3"               "alter.centr.eigen.W1"
-# [19] "alter.centr.eigen.W2"         "alter.centr.eigen.W3"
-# [21] "alter.centr.indeg.W1"         "alter.centr.indeg.W2"
-# [23] "alter.centr.indeg.W3"         "canpref.W1"
-# [25] "canpref.W2"                   "canpref.W3"
-# [27] "age.years"                    "female"
-# [29] "edu"                          "household.income"
-# [31] "residential.region"           "pref.certainty.W2"
-# [33] "pref.certainty.W3"            "ideo.W1"
-# [35] "ideo.W2"                      "ideo.W3"
-# [37] "ideo_str.W1"                  "ideo_str.W2"
-# [39] "ideo_str.W3"                  "perceived.opinion.climate.W2"
-# [41] "perceived.opinion.climate.W3" "consistency.motivation"
-# [43] "understanding.motivation"     "hedonic.motivation"
-# [45] "internal.efficacy.W1"         "internal.efficacy.W2"
-# [47] "internal.efficacy.W3"         "pol.interest.W1"
-# [49] "pol.interest.W2"              "pol.interest.W3"
-# [51] "internet.news.use.W2"         "newspaper.use.W2"
-# [53] "tv.news.use.W2"               "outgroup.negativity.bias.W2"
-# [55] "outgroup.negativity.bias.W3"  "ingroup.favoritism.bias.W2"
-# [57] "ingroup.favoritism.bias.W3"   "affective.polarization.W2"
-# [59] "affective.polarization.W3"
+# [5] "dangerous.disc.W1.wavesum"    "safe.disc.W1.wavesum"
+# [7] "raw_sum.W1.wavesum"           "safe.disc.W2"
+# [9] "dangerous.disc.W2"            "exp.disagr.offline.prcpt.W2"
+# [11] "exp.disagr.online.prcpt.W2"   "dangerous.disc.W2.wavesum"
+# [13] "safe.disc.W2.wavesum"         "raw_sum.W2.wavesum"
+# [15] "exp.disagr.offline.prcpt.W3"  "exp.disagr.online.prcpt.W3"
+# [17] "ego.netsize.W1"               "ego.netsize.W2"
+# [19] "alter.centr.eigen.W1"         "alter.centr.eigen.W2"
+# [21] "canpref.W1"                   "canpref.W2"
+# [23] "canpref.W3"                   "age.years"
+# [25] "female"                       "edu"
+# [27] "household.income"             "residential.region"
+# [29] "pref.certainty.W2"            "pref.certainty.W3"
+# [31] "ideo.W1"                      "ideo.W2"
+# [33] "ideo.W3"                      "ideo_str.W1"
+# [35] "ideo_str.W2"                  "ideo_str.W3"
+# [37] "perceived.opinion.climate.W2" "perceived.opinion.climate.W3"
+# [39] "consistency.motivation"       "understanding.motivation"
+# [41] "hedonic.motivation"           "internal.efficacy.W1"
+# [43] "internal.efficacy.W2"         "internal.efficacy.W3"
+# [45] "pol.interest.W1"              "pol.interest.W2"
+# [47] "pol.interest.W3"              "internet.news.use.W2"
+# [49] "newspaper.use.W2"             "tv.news.use.W2"
+# [51] "media.exposure.W2"            "outgroup.negativity.bias.W2"
+# [53] "outgroup.negativity.bias.W3"  "ingroup.favoritism.bias.W2"
+# [55] "ingroup.favoritism.bias.W3"   "affective.polarization.W2"
+# [57] "affective.polarization.W3"    "discussion.norm.W2"
+
+## --------------------------- ##
+## Timeline of data collection ##
+## --------------------------- ##
+
+timevis(data = data.frame(
+  start = c("2012-11-27", "2012-11-23", "2012-12-11", "2012-12-11", "2012-12-21"),
+  end = c("2012-11-29", "2012-12-10 23:59:59", "2012-12-13", "2012-12-19", "2012-12-23"),
+  content = c("W1", "Wave 1 Exposure", "W2", "Wave 2 Exposure", "W3"),
+  group = c(1, 2, 1, 2, 1)),
+  groups = data.frame(id = 1:2, content = c("Panel Survey", "Log data")),
+  showZoom = FALSE,
+  options = list(editable = TRUE, height = "200px")
+)
+
+## ----------------------- ##
+## Descriptive / Measures  ##
+## ----------------------- ##
+
+dat[, age] %>% descriptives(.)
+dat[, sex] %>% descriptives(.)
+dat[, edu] %>% descriptives(.)
+dat[, income] %>% descriptives(.)
+cleaned.data[, table(female)/sum(table(female))]
+
+
+cleaned.data[, table(canpref.W1)/.N]
+cleaned.data[, safe.disc.W1] %>% descriptives(.)
+cleaned.data[, dangerous.disc.W1] %>% descriptives(.)
+cleaned.data[, safe.disc.W2] %>% descriptives(.)
+cleaned.data[, dangerous.disc.W2] %>% descriptives(.)
+
+cleaned.data[, exp.disagr.online.prcpt.W2] %>% descriptives(.)
+cleaned.data[, exp.disagr.online.prcpt.W3] %>% descriptives(.)
+
+## offline exposure to disagreement
+cleaned.data[, exp.disagr.offline.prcpt.W1] %>% descriptives(.)
+cleaned.data[, exp.disagr.offline.prcpt.W2] %>% descriptives(.)
+cleaned.data[, exp.disagr.offline.prcpt.W3] %>% descriptives(.)
+
+## other variables in the model, for regression/mediation model
+cleaned.data[, perceived.opinion.climate.W2] %>% descriptives(.)
+cleaned.data[, perceived.opinion.climate.W3] %>% descriptives(.)
+cleaned.data[, affective.polarization.W2] %>% descriptives(.)
+cleaned.data[, affective.polarization.W3] %>% descriptives(.)
+
+cleaned.data[, ideo.W2] %>% descriptives(.)
+cleaned.data[, media.exposure.W2] %>% descriptives(.)
+cleaned.data[, pol.interest.W2] %>% descriptives(.)
+cleaned.data[, discussion.norm.W2]  %>% descriptives(.)
+cleaned.data[, ego.netsize.W1] %>% descriptives(.)
+cleaned.data[, raw_sum.W1.wavesum] %>% descriptives(.)
+
 
 ## ----------------------- ##
 ## 1. Preliminary analysis ##
 ## ----------------------- ##
 
-
-# make the rounded percentage and rerun the correlation does not change the results!
-cleaned.data[, dangerous.disc.W2.prop := (dangerous.disc.W2 %>% round(., digits = 2))*100]
-bivariate.perm.test(cleaned.data, "dangerous.disc.W2.prop", "exp.disagr.offline.prcpt.W2")
-cleaned.data[, dangerous.disc.W2.sum.prop := (dangerous.disc.W2.sum %>%
-                                                round(., digits = 2))*100]
-bivariate.perm.test(cleaned.data, "dangerous.disc.W2.sum.prop", "exp.disagr.offline.prcpt.W2")
-
-cleaned.data[, cor(dangerous.disc.W2.prop, exp.disagr.online.prcpt.W2)]
-bivariate.perm.test(cleaned.data, "dangerous.disc.W2.prop", "exp.disagr.online.prcpt.W2")
-# obs.minus.perm llci.0.025 ulci.0.975
-#      0.2851594  0.1758708  0.3888837
-cleaned.data[, cor(dangerous.disc.W2.sum.prop, exp.disagr.online.prcpt.W2)]
-bivariate.perm.test(cleaned.data, "dangerous.disc.W2.sum.prop", "exp.disagr.online.prcpt.W2")
-# obs.minus.perm     llci.0.025     ulci.0.975
-#      0.2582314      0.1599817      0.3656424
-
-## create differences between perception and behavioral measures
-## (+) values indicate the overestimation, and (-) means underestimation
-cleaned.data[, diff.exp.disagree.W2 := exp.disagr.online.prcpt.W2 - dangerous.disc.W2.prop]
-cleaned.data[, summary(diff.exp.disagree.W2)]
-cleaned.data[, diff.exp.disagree.W2.sum :=
-               exp.disagr.online.prcpt.W2 - dangerous.disc.W2.sum.prop]
-cleaned.data[, summary(diff.exp.disagree.W2.sum)]
-
-
-## permutation test indicates that the difference between
-## perception and objective behavior is significantly differ,
-## in a way that people tend to overestimate the exposure to differences
-diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W2", "dangerous.disc.W2.prop", rep = 20000)
-diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W2", "dangerous.disc.W2.sum.prop", rep = 20000)
-
-
-
-cleaned.data[, cor(dangerous.disc.W3, exp.disagr.online.prcpt.W3)]
-bivariate.perm.test(cleaned.data, "dangerous.disc.W3", "exp.disagr.online.prcpt.W3")
-# obs.minus.perm     llci.0.025     ulci.0.975
-#      0.2958441      0.1926712      0.4104359
-cleaned.data[, cor(dangerous.disc.W3.sum, exp.disagr.online.prcpt.W3)]
-bivariate.perm.test(cleaned.data, "dangerous.disc.W3.sum", "exp.disagr.online.prcpt.W3")
-# obs.minus.perm     llci.0.025     ulci.0.975
-#      0.3624799      0.2601810      0.4709605
-
-## create differences between perception and behavioral measures
-## (+) values indicate the overestimation, and (-) means underestimation
-cleaned.data[, dangerous.disc.W3.prop := (dangerous.disc.W3 %>% round(., digits = 2))*100]
-cleaned.data[, dangerous.disc.W3.sum.prop := (dangerous.disc.W3.sum %>% round(., digits = 2))*100]
-cleaned.data[, diff.exp.disagree.W3 := exp.disagr.online.prcpt.W3 - dangerous.disc.W3.prop]
-cleaned.data[, summary(diff.exp.disagree.W3)]
-cleaned.data[, diff.exp.disagree.W3.sum :=
-               exp.disagr.online.prcpt.W3 - dangerous.disc.W3.sum.prop]
-cleaned.data[, summary(diff.exp.disagree.W3.sum)]
-
-## permutation test indicates that the difference between
-## perception and objective behavior is significantly differ,
-## in a way that people tend to overestimate the exposure to differences
-diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W3", "dangerous.disc.W3.prop", rep = 20000)
-diff.perm.test(cleaned.data, "exp.disagr.online.prcpt.W3", "dangerous.disc.W3.sum.prop", rep = 20000)
-
-## make figures
 qq.out2 <- with(cleaned.data,
-                qqplot(x = exp.disagr.online.prcpt.W2,
-                       y = dangerous.disc.W2.prop,
+                qqplot(x = dangerous.disc.W1,
+                       y = exp.disagr.online.prcpt.W2,
                        plot.it = FALSE)) %>% as.data.frame(.) %>% setDT(.)
 
 qq.out3 <- with(cleaned.data,
-               qqplot(x = exp.disagr.online.prcpt.W3,
-                      y = dangerous.disc.W3.prop,
-                      plot.it = FALSE)) %>% as.data.frame(.) %>% setDT(.)
+                qqplot(x = dangerous.disc.W2,
+                       y = exp.disagr.online.prcpt.W3,
+                       plot.it = FALSE)) %>% as.data.frame(.) %>% setDT(.)
 
 qq2 <- ggplot(qq.out2, aes(x = x, y = y)) +
   geom_jitter(width = 0.02, color = "grey") + theme_bw() +
-  geom_boxplot(aes(group = x), outlier.colour = "grey", outlier.shape = 1) +
-  stat_summary(fun.y = median, geom = "line", aes(group=1), color = "red") +
-  geom_segment(aes(x = 0, xend = 100, y = 0, yend = 100),
+  stat_smooth(aes(group = 1), color = "red", se = FALSE) +
+  geom_segment(aes(x = 0, xend = 1, y = 0, yend = 100),
                lty = 2, color = "grey") +
-  xlab("Perception (% of Exposure to disagreement)") +
-  ylab("Activity log (Mean proportion)") +
-  ggtitle("Quantile-Quantile plot, Wave 2")
+  xlab("W1 Exposure log data (Mean proportion)") +
+  ylab("W2 Perception (% of Exposure to disagreement)") +
+  ggtitle("Quantile-Quantile plot, W1 Exposure vs. W2 Perception")
 
 qq3 <- ggplot(qq.out3, aes(x = x, y = y)) +
   geom_jitter(width = 0.02, color = "grey") + theme_bw() +
-  geom_boxplot(aes(group = x), outlier.colour = "grey", outlier.shape = 1) +
-  stat_summary(fun.y = median, geom = "line", aes(group=1), color = "red") +
-  geom_segment(aes(x = 0, xend = 100, y = 0, yend = 100),
+  stat_smooth(aes(group = 1), color = "red", se = FALSE) +
+  geom_segment(aes(x = 0, xend = 1, y = 0, yend = 100),
                lty = 2, color = "grey") +
-  xlab("Perception (% of Exposure to disagreement)") +
-  ylab("Activity log (Mean proportion)") +
-  ggtitle("Quantile-Quantile plot, Wave 3")
+  xlab("W2 Exposure log data (Mean proportion)") +
+  ylab("W3 Perception (% of Exposure to disagreement)") +
+  ggtitle("Quantile-Quantile plot, W2 Exposure - W3 Perception")
 
 qq2 + qq3 + plot_layout(nrow = 1)
+
+## check the correlation of measures
+cleaned.data[, cor.test(dangerous.disc.W1, exp.disagr.online.prcpt.W2)]
+cleaned.data[, cor.test(dangerous.disc.W2, exp.disagr.online.prcpt.W3)]
+bivariate.perm.test(cleaned.data, "dangerous.disc.W1", "exp.disagr.online.prcpt.W2")
+bivariate.perm.test(cleaned.data, "dangerous.disc.W2", "exp.disagr.online.prcpt.W3")
+# cf. make the rounded percentage and rerun the correlation does not change the results!
+
+## create differences between perception and behavioral measures
+## (+) values indicate the overestimation, and (-) means underestimation
+cleaned.data[, dangerous.disc.W1.prop := dangerous.disc.W1*100]
+cleaned.data[, diff.exp.disagree.W2 := exp.disagr.online.prcpt.W2 - dangerous.disc.W1.prop]
+cleaned.data[, summary(diff.exp.disagree.W2)]
+cleaned.data[, dangerous.disc.W2.prop := dangerous.disc.W2*100]
+cleaned.data[, diff.exp.disagree.W3 := exp.disagr.online.prcpt.W3 - dangerous.disc.W2.prop]
+cleaned.data[, summary(diff.exp.disagree.W3)]
+
+
+## permutation test indicates that the difference between
+## perception and objective behavior is significantly differ,
+## in a way that people tend to overestimate the exposure to differences
+diff.perm.test(cleaned.data, rep = 20000,
+               "exp.disagr.online.prcpt.W2", "dangerous.disc.W1.prop")
+diff.perm.test(cleaned.data, rep = 20000,
+               "exp.disagr.online.prcpt.W3", "dangerous.disc.W2.prop")
+
+
 
 ## ------------------------------------- ##
 ## Predicting perceived opinion climates ##
@@ -144,10 +161,8 @@ qq2 + qq3 + plot_layout(nrow = 1)
 
 cleaned.data[, log.raw_sum.W1.wavesum := log(raw_sum.W1.wavesum + 1)][,
                log.raw_sum.W1.wavesum := log.raw_sum.W1.wavesum - mean(log.raw_sum.W1.wavesum)]
-cleaned.data[, perceived.opinion.climate.W2 :=
-               scales::rescale(perceived.opinion.climate.W2, to = c(0, 100))]
-cleaned.data[, perceived.opinion.climate.W3 :=
-               scales::rescale(perceived.opinion.climate.W3, to = c(0, 100))]
+cleaned.data[, log.ego.netsize.W1.c := log(ego.netsize.W1 + 1)][,
+               log.ego.netsize.W1.c := log.ego.netsize.W1.c - mean(log.ego.netsize.W1.c)]
 
 ## mean-center all predictors
 cleaned.data[, safe.disc.W1.c := safe.disc.W1 - mean(safe.disc.W1)]
@@ -178,7 +193,7 @@ model.M1 <- lm(perceived.opinion.climate.W2 ~
                  ## demographic controls
                  age.years + female + edu + household.income +
                  ## political correlates
-                 ideo.W2.c + pol.interest.W2.c + ego.netsize.W2.c +
+                 ideo.W2.c + pol.interest.W2.c + log.ego.netsize.W1.c +
                  ## media exposure
                  media.exposure.W2.c
               ,
@@ -214,18 +229,23 @@ model.M1.int2 <- lm(update.formula(model.M1,
                     data = cleaned.data)
 summary(model.M1.int2)
 
-## no effect on affective polarization
+## affective polarization
 model.M2.int1 <- lm(
-  update.formula(model.M2, . ~ . + dangerous.disc.W1.c*ideo.W2.c),
-  data = cleaned.data); summary(model.M2.int1)
+  update.formula(model.M2, . ~ . + dangerous.disc.W1.c*discussion.norm.W2.c),
+  data = cleaned.data); summary(model.M2.int1) ## yet not likely to be real....
+jtools::interact_plot(model.M2.int1,
+                      pred = "dangerous.disc.W1.c", modx = "discussion.norm.W2.c")
+
 model.M2.int2 <- lm(
   update.formula(model.M2, . ~ . + safe.disc.W1.c*ideo.W2.c),
   data = cleaned.data); summary(model.M2.int2)
+jtools::interact_plot(model.M2.int2,
+                      pred = "safe.disc.W1.c", modx = "ideo.W2.c")
 
 
 ## predicting self-reported exposure to disagreement
 model.Y2 <- lm(update.formula(model.M1,
-               exp.disagr.online.prcpt.W3 ~ .
+               exp.disagr.online.prcpt.W3 ~ . # + dangerous.disc.W2 + safe.disc.W2 +
                + perceived.opinion.climate.W2.c + affective.polarization.W2.c),
               data = cleaned.data); summary(model.Y2)
 
@@ -235,24 +255,26 @@ screenreg(list(model.M1, model.M2, model.Y2),
           custom.model.names = c("M1: Prcvd Op Climate", "M2: Affective pol", "Y: Self-reptd Dis"),
           custom.coef.names = c("(Intercept)",
                                 "In-prty msg Exp W1", "Out-prty msg Exp W1",
-                                "Total no. of exp (log)", "Discussion norm W2",
+                                "Total Exp W1 (log)", "Discussion norm W2",
                                 "Age (in years)", "Female", "Education", "HH income",
                                 "Ideology W2", "Interest W2",
-                                "Net size W2", "Media Exposure W2", "Prcvd Op Climate", "Affective pol"),
+                                "Net size W1 (log)", "Media Exposure W2",
+                                "Prcvd Op Climate W2", "Affective pol W2"),
           reorder.coef = c(2:3, 14:15, 4:5, 10:13, 6:9, 1),
           groups = list("Focal predictors" = 1:2, "Mediators" = 3:4,
                         "Controls" = 5:10, "Demographics" = 11:14, "Intercept" = 15))
 
 ## First stage moderation models
-screenreg(list(model.M1, model.M1.int1, model.M1.int2),
+screenreg(list(model.M1, model.M1.int1, model.M2, model.M2.int2),
           single.row = T, digits = 3, leading.zero = FALSE,
-          custom.model.names = c("Prcvd Op Climate", "Interaction I", "Interaction II"),
+          custom.model.names = c("Prcvd Op Climate", "POC Interaction",
+                                 "Affective Pol", " AP Interaction"),
           custom.coef.names = c("(Intercept)",
                                 "In-prty msg Exp W1", "Out-prty msg Exp W1",
                                 "Total no. of exp (log)", "Discussion norm W2",
                                 "Age (in years)", "Female", "Education", "HH income",
                                 "Ideology W2", "Interest W2",
-                                "Net size W2", "Media Exposure W2",
+                                "Net size W2 (log)", "Media Exposure W2",
                                 "Out-prty Exp X Ideo",
                                 "In-prty Exp X Ideo"),
           reorder.coef = c(2:3, 10,14:15, 4:5, 11:13, 6:9, 1),

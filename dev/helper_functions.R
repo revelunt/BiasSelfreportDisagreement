@@ -86,7 +86,7 @@ diff.perm.test <- function(data, var1, var2,
     mean(diff.perm)
   }))
 
-  CIs <- quantile(perm, c(alpha1, alpha2))
+  CIs <- quantile(diff.obs.m - perm, c(alpha1, alpha2))
   out <- c(diff.obs.m, CIs[1], CIs[2])
   names(out) <- c("diff.obs", paste('llci', alpha1, sep = "."), paste('ulci', alpha2, sep = "."))
 
@@ -333,6 +333,15 @@ select.modval <- function(dat, modx) {
   mod.val <- unique(round(mod.val, digits = 2))
   mod.val
 }
+
+## mean/sd function
+descriptives <- function(var) {
+  m <- mean(var, na.rm = T)
+  sd <- sd(var, na.rm = T)
+  return(c(M = m, SD = sd))
+}
+
+
 
 ## estimate conditional effects
 est.cond.indirect <- function(dat, ## data frame to pass for bootstrapping
