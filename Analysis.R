@@ -181,6 +181,51 @@ cleaned.data[, affective.polarization.W2.c :=
                affective.polarization.W2 - mean(affective.polarization.W2)]
 
 
+# ## first, look at the models directly predicting
+# ## degree of over- or under-reporting of exposure to disagreement
+# ## based on total exposure
+# cleaned.data[, accuracy.W1 :=
+#                (exp.disagr.online.prcpt.W2 -
+#                cleaned.data[, dangerous.disc.W1.wavesum] %>% dplyr::ntile(., 10)*10) %>%
+#                car::recode(., "lo:-1 = -1; 0 = 0; 1:hi = 1", as.factor = T)]
+# cleaned.data[, table(accuracy.W1)]
+#
+# cleaned.data[, accuracy.W2 :=
+#                (exp.disagr.online.prcpt.W3 -
+#                   cleaned.data[, dangerous.disc.W2.wavesum] %>% dplyr::ntile(., 10)*10) %>%
+#                car::recode(., "lo:-1 = -1; 0 = 0; 1:hi = 1", as.factor = T)]
+# cleaned.data[, table(accuracy.W2)]
+#
+# require(VGAM)
+# fit.1 <- vglm(accuracy.W1 ~
+#                 ## demographic controls
+#                 age.years + female + edu + household.income +
+#                 ## political correlates
+#                 ideo.W2.c + pol.interest.W2.c + log.ego.netsize.W1.c +
+#                 ## media exposure
+#                 media.exposure.W2.c
+#               , multinomial(refLevel = 2), data = cleaned.data)
+#
+# summary(fit.1)
+#
+# fit.2 <- vglm(accuracy.W2 ~
+#                 ## demographic controls
+#                 age.years + female + edu + household.income +
+#                 ## political correlates
+#                 ideo.W2.c + pol.interest.W2.c + log.ego.netsize.W1.c +
+#                 ## media exposure
+#                 media.exposure.W2.c
+#               , multinomial(refLevel = 2), data = cleaned.data)
+#
+# summary(fit.2)
+
+
+
+
+
+
+
+
 ## model predicting perceived opinion climate
 model.M1 <- lm(perceived.opinion.climate.W2 ~
                 ## focal predictor
@@ -198,6 +243,19 @@ model.M1 <- lm(perceived.opinion.climate.W2 ~
                  media.exposure.W2.c
               ,
               data = cleaned.data); summary(model.M1)
+
+model.rM1 <- rlm(formula(model.M1), data = cleaned.data)
+summary(model.rM1)
+
+boot.rM1 <- function(data, indices, maxit=20){
+  data <- data[indices,] # select obs. in bootstrap sample
+  mod <- rlm(formula(model.M1), data = data, maxit = maxit)
+  coefficients(mod) # return coefficient vector
+  }
+
+system.time(model.rM1.b <- boot(cleaned.data, boot.rM1, R = 5000, maxit = 100,
+                                parallel = "multicore", ncpus = 8))
+
 
 ## model predicting online exposure to disagreement, perception
 model.Y1 <- lm(update.formula(model.M1,
@@ -377,3 +435,51 @@ out.cond1 <- cbind(var = rownames(out.cond1), out.cond1) %>% setDT(.)
                                   "Conservative", "Extremely Conserv")) +
     ggtitle("Conditional indirect effect of actual exposure to out-party discussants' messages")
 
+
+
+
+
+
+  ## difference estimator
+  test.data <- cleaned.data
+
+  ## DV: (+) means increase in exposure (perception)
+  test.data[, Y := exp.disagr.online.prcpt.W3 - exp.disagr.online.prcpt.W2]
+
+  ## IV: (+) means increase in exposure (actual)
+  test.data[, X.dangerous := dangerous.disc.W2 - dangerous.disc.W1]
+  test.data[, X.safe := safe.disc.W2 - safe.disc.W1]
+
+  ## mediator: (+) means increase in measures
+  test.data[, M.opc := perceived.opinion.climate.W3 - perceived.opinion.climate.W2]
+  test.data[, M.afp := affective.polarization.W3 - affective.polarization.W2]
+
+  lm(Y ~ X.dangerous +
+         X.safe +
+         log.raw_sum.W1.wavesum +
+         ## mediator
+         M.opc +
+         M.afp +
+         ## discussion motivation
+         discussion.norm.W2.c +
+         ## demographic controls
+         age.years + female + edu + household.income +
+         ## political correlates
+         ideo.W2.c + pol.interest.W2.c + log.ego.netsize.W1.c +
+         ## media exposure
+         media.exposure.W2.c,
+     data = test.data) %>% summary()
+
+  lm(M.opc ~
+       X.dangerous*internal.efficacy.W2 +
+       X.safe +
+       log.raw_sum.W1.wavesum +
+       ## discussion motivation
+       discussion.norm.W2.c +
+       ## demographic controls
+       age.years + female + edu + household.income +
+       ## political correlates
+       ideo.W2.c + pol.interest.W2.c + log.ego.netsize.W1.c +
+       ## media exposure
+       media.exposure.W2.c,
+     data = test.data) %>% interact_plot(., pred = 'X.dangerous', modx = 'internal.efficacy.W2')
