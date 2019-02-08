@@ -2,12 +2,14 @@
 ## prepare data for analysis
 ## automatically setting working directories
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
-if (!("cleaned.data" %in% ls())) source("dev/PreProcess.R")
+if (!("cleaned.data" %in% ls())) source("dev/PreProcess_new.R")
 
 require(texreg)
 require(ggplot2)
 require(jtools)
-require(plotROC)
+require(timevis)
+require(cocor)
+require(lavaan)
 
 ## we use 'cleaned.data' for the rest of the analysis
 # > colnames(cleaned.data)
@@ -47,11 +49,16 @@ require(plotROC)
 ## --------------------------- ##
 
 timevis(data = data.frame(
-  start = c("2012-11-27", "2012-11-23", "2012-12-11", "2012-12-11", "2012-12-21"),
-  end = c("2012-11-29", "2012-12-10 23:59:59", "2012-12-13", "2012-12-19", "2012-12-23"),
-  content = c("W1", "Wave 1 Exposure", "W2", "Wave 2 Exposure", "W3"),
-  group = c(1, 2, 1, 2, 1)),
-  groups = data.frame(id = 1:2, content = c("Panel Survey", "Log data")),
+  start = c("2012-11-27", "2012-12-11", "2012-12-21",
+            "2012-12-07", "2012-11-27"),
+  end = c("2012-11-29", "2012-12-13", "2012-12-23",
+            "2012-12-19 23:59:59", "2012-12-10 23:59:59"),
+  content = c("W1", "W2", "W3",
+              "Wave 2 Exposure (vs. W3 self-report)",
+              "Wave 1 Exposure (vs. W2 self-report)"),
+  group = c(1, 1, 1, 3, 2)),
+  groups = data.frame(id = 1:3,
+                      content = c("Panel Survey", "Log data", "Log data")),
   showZoom = FALSE,
   options = list(editable = TRUE, height = "200px")
 )
@@ -69,18 +76,11 @@ cleaned.data[, table(female)/sum(table(female))]
 
 
 cleaned.data[, table(canpref.W1)/.N]
-cleaned.data[, safe.disc.W1] %>% descriptives(.)
 cleaned.data[, dangerous.disc.W1] %>% descriptives(.)
-cleaned.data[, safe.disc.W2] %>% descriptives(.)
 cleaned.data[, dangerous.disc.W2] %>% descriptives(.)
 
-cleaned.data[, exp.disagr.online.prcpt.W2] %>% descriptives(.)
-cleaned.data[, exp.disagr.online.prcpt.W3] %>% descriptives(.)
-
-## offline exposure to disagreement
-cleaned.data[, exp.disagr.offline.prcpt.W1] %>% descriptives(.)
-cleaned.data[, exp.disagr.offline.prcpt.W2] %>% descriptives(.)
-cleaned.data[, exp.disagr.offline.prcpt.W3] %>% descriptives(.)
+cleaned.data[, dangerous.disc.prcptn.W2] %>% descriptives(.)
+cleaned.data[, dangerous.disc.prcptn.W3] %>% descriptives(.)
 
 ## other variables in the model, for regression/mediation model
 cleaned.data[, perceived.opinion.climate.W2] %>% descriptives(.)
@@ -92,8 +92,8 @@ cleaned.data[, ideo.W2] %>% descriptives(.)
 cleaned.data[, media.exposure.W2] %>% descriptives(.)
 cleaned.data[, pol.interest.W2] %>% descriptives(.)
 cleaned.data[, discussion.norm.W2]  %>% descriptives(.)
-cleaned.data[, ego.netsize.W1] %>% descriptives(.)
-cleaned.data[, raw_sum.W1.wavesum] %>% descriptives(.)
+cleaned.data[, log.netsize.W1] %>% descriptives(.)
+cleaned.data[, log.netsize.W2] %>% descriptives(.)
 
 
 ## ----------------------- ##
@@ -102,12 +102,12 @@ cleaned.data[, raw_sum.W1.wavesum] %>% descriptives(.)
 
 qq.out2 <- with(cleaned.data,
                 qqplot(x = dangerous.disc.W1,
-                       y = exp.disagr.online.prcpt.W2,
+                       y = dangerous.disc.prcptn.W2,
                        plot.it = FALSE)) %>% as.data.frame(.) %>% setDT(.)
 
 qq.out3 <- with(cleaned.data,
                 qqplot(x = dangerous.disc.W2,
-                       y = exp.disagr.online.prcpt.W3,
+                       y = dangerous.disc.prcptn.W3,
                        plot.it = FALSE)) %>% as.data.frame(.) %>% setDT(.)
 
 qq2 <- ggplot(qq.out2, aes(x = x, y = y)) +
@@ -131,19 +131,22 @@ qq3 <- ggplot(qq.out3, aes(x = x, y = y)) +
 qq2 + qq3 + plot_layout(nrow = 1)
 
 ## check the correlation of measures
-cleaned.data[, cor.test(dangerous.disc.W1, exp.disagr.online.prcpt.W2)]
-cleaned.data[, cor.test(dangerous.disc.W2, exp.disagr.online.prcpt.W3)]
-bivariate.perm.test(cleaned.data, "dangerous.disc.W1", "exp.disagr.online.prcpt.W2")
-bivariate.perm.test(cleaned.data, "dangerous.disc.W2", "exp.disagr.online.prcpt.W3")
-# cf. make the rounded percentage and rerun the correlation does not change the results!
+cleaned.data[, cor.test(dangerous.disc.W1, dangerous.disc.prcptn.W2)]
+cleaned.data[, cor.test(dangerous.disc.W2, dangerous.disc.prcptn.W3)]
+bivariate.perm.test(cleaned.data,
+                    "dangerous.disc.W1", "dangerous.disc.prcptn.W2")
+bivariate.perm.test(cleaned.data,
+                    "dangerous.disc.W2", "dangerous.disc.prcptn.W3")
 
 ## create differences between perception and behavioral measures
 ## (+) values indicate the overestimation, and (-) means underestimation
 cleaned.data[, dangerous.disc.W1.prop := dangerous.disc.W1*100]
-cleaned.data[, diff.exp.disagree.W2 := exp.disagr.online.prcpt.W2 - dangerous.disc.W1.prop]
+cleaned.data[, diff.exp.disagree.W2 :=
+               dangerous.disc.prcptn.W2 - dangerous.disc.W1.prop]
 cleaned.data[, summary(diff.exp.disagree.W2)]
 cleaned.data[, dangerous.disc.W2.prop := dangerous.disc.W2*100]
-cleaned.data[, diff.exp.disagree.W3 := exp.disagr.online.prcpt.W3 - dangerous.disc.W2.prop]
+cleaned.data[, diff.exp.disagree.W3 :=
+               dangerous.disc.prcptn.W3 - dangerous.disc.W2.prop]
 cleaned.data[, summary(diff.exp.disagree.W3)]
 
 
@@ -151,175 +154,292 @@ cleaned.data[, summary(diff.exp.disagree.W3)]
 ## perception and objective behavior is significantly differ,
 ## in a way that people tend to overestimate the exposure to differences
 diff.perm.test(cleaned.data, rep = 20000,
-               "exp.disagr.online.prcpt.W2", "dangerous.disc.W1.prop")
+               "dangerous.disc.prcptn.W2", "dangerous.disc.W1.prop")
 diff.perm.test(cleaned.data, rep = 20000,
-               "exp.disagr.online.prcpt.W3", "dangerous.disc.W2.prop")
+               "dangerous.disc.prcptn.W3", "dangerous.disc.W2.prop")
 
 
 ## ------------------------------- ##
 ## some more recoding of variables ##
 ## ------------------------------- ##
 
-cleaned.data[, log.raw_sum.W1.wavesum := log(raw_sum.W1.wavesum + 1)][,
-               log.raw_sum.W1.wavesum := log.raw_sum.W1.wavesum - mean(log.raw_sum.W1.wavesum)]
-cleaned.data[, log.ego.netsize.W1.c := log(ego.netsize.W1 + 1)][,
-               log.ego.netsize.W1.c := log.ego.netsize.W1.c - mean(log.ego.netsize.W1.c)]
-cleaned.data[, log.raw_sum.W2.wavesum := log(raw_sum.W2.wavesum + 1)][,
-               log.raw_sum.W2.wavesum := log.raw_sum.W2.wavesum - mean(log.raw_sum.W2.wavesum)]
-cleaned.data[, log.ego.netsize.W2.c := log(ego.netsize.W1 + 1)][,
-               log.ego.netsize.W2.c := log.ego.netsize.W1.c - mean(log.ego.netsize.W2.c)]
+cleaned.data[, log.total.exp.W1 := log(total.exp.W1 + 1)]
+cleaned.data[, log.total.exp.W2 := log(total.exp.W2 + 1)]
 
-## mean-center all predictors
-cleaned.data[, safe.disc.W1.c := safe.disc.W1 - mean(safe.disc.W1)]
-cleaned.data[, dangerous.disc.W1.c := dangerous.disc.W1 - mean(dangerous.disc.W1)]
-cleaned.data[, safe.disc.W2.c := safe.disc.W2 - mean(safe.disc.W2)]
-cleaned.data[, dangerous.disc.W2.c := dangerous.disc.W2 - mean(dangerous.disc.W2)]
-cleaned.data[, discussion.norm.W2.c := discussion.norm.W2 - mean(discussion.norm.W2)]
-cleaned.data[, age.years := age.years - mean(age.years)]
-cleaned.data[, edu := edu - median(edu)]
-cleaned.data[, household.income := household.income - median(household.income)]
-cleaned.data[, ideo.W2.c := ideo.W2 - 4] ## 4 == "middle of the road"
-cleaned.data[, pol.interest.W2.c := pol.interest.W2 - mean(pol.interest.W2)]
-cleaned.data[, media.exposure.W2.c := media.exposure.W2 - mean(media.exposure.W2)]
-cleaned.data[, ego.netsize.W2.c := ego.netsize.W2 - mean(ego.netsize.W2)]
-cleaned.data[, perceived.opinion.climate.W2.c :=
-               perceived.opinion.climate.W2 - mean(perceived.opinion.climate.W2)]
-cleaned.data[, affective.polarization.W2.c :=
-               affective.polarization.W2 - mean(affective.polarization.W2)]
-cleaned.data[, pol.know.c := pol.know - mean(pol.know)]
+cleaned.data[, accuracy.W2 :=
+               (dangerous.disc.prcptn.W2 - dangerous.disc.W1.prop)/10]
+cleaned.data[, accuracy.cat.W2 := car::recode(accuracy.W2,
+               "0.1:hi = 'over'; else = 'accurate'", as.factor = T)]
+cleaned.data[, table(accuracy.W2)]
+cleaned.data[, table(accuracy.cat.W2)]
 
 
+cleaned.data[, accuracy.W3 :=
+               (dangerous.disc.prcptn.W3 - dangerous.disc.W2.prop)/10]
+cleaned.data[, accuracy.cat.W3 := car::recode(accuracy.W3,
+               "0.1:hi = 'over'; else = 'accurate'", as.factor = T)]
+cleaned.data[, table(accuracy.W3)]
+cleaned.data[, table(accuracy.cat.W3)]
+
+# cleaned.data$canpref.W2 <- factor(cleaned.data$canpref.W2)
+# cleaned.data$canpref.W3 <- factor(cleaned.data$canpref.W3)
 ## ----------------------------------------------------------- ##
 ## Does overreporting correlated with social desiability bias? ##
 ## we test this by interacting with discussion norm            ##
 ## ----------------------------------------------------------- ##
 
-model1 <- lm(exp.disagr.online.prcpt.W2 ~
+## cf. a-priory power analysis (using gpower)
+## indicates for detecting small effect given sample size
+## alpha is 0.07, therefore we stick to alpha = 0.5
+
+## we can model the "latent" change score using univariate latent change score
+## similar to latent growth model
+## see https://www.tandfonline.com/doi/abs/10.1080/00049539208260150
+## we can model latent "discrepancy" factor
+## and subsequently regress on a set of exogenous variables
+
+require(lavaan)
+
+model1.luc.fm <- '
+
+## baseline and descrepancy factor
+    f_base =~ 1*dangerous.disc.W1.prop + 1*dangerous.disc.prcptn.W2
+    f_diff =~ 1*dangerous.disc.prcptn.W2
+
+## mean and variance of subjective/objective measures, all fixed to 0
+   dangerous.disc.prcptn.W2 ~ 1*0
+   dangerous.disc.prcptn.W2 ~~ 0*dangerous.disc.prcptn.W2
+   dangerous.disc.W1.prop ~ 1*0
+   dangerous.disc.W1.prop ~~ 0*dangerous.disc.W1.prop
+## conditional intercept and variance of latent score
+   f_diff ~ 1
+   f_diff ~~ f_diff
+   f_base ~ 1
+   f_base ~~ f_base
+## covariance of latent scores
+   f_base ~~ f_diff
+
+## regress objective exposure on Xs
+   ## baseline total exposure
+      f_base ~ log.total.exp.W1
+   ## demographics
+      f_base ~ age.years + female + edu + household.income
+   ## partisanships
+      f_base ~ canpref.W2 + ideo_str.W2
+   ## motivation and ability factor
+      f_base ~  pol.interest.W2 + pol.know + media.exposure.W2
+
+## regress descprepancy on Xs
+      f_diff ~ discussion.norm.W2 +
+               perceived.opinion.climate.W2 +
+               log.total.exp.W1 +
+               age.years + female + edu + household.income +
+               canpref.W2 + pol.interest.W2 + pol.know + ideo_str.W2 +
+               media.exposure.W2
+'
+
+model1.luc <- sem(model1.luc.fm, data = cleaned.data)
+summary(model1.luc, fit.measures = TRUE)
+# modificationindices(model1.luc, sort. = T)
+
+model2.luc.fm <- '
+
+## baseline and descrepancy factor
+    f_base =~ 1*dangerous.disc.W2.prop + 1*dangerous.disc.prcptn.W3
+    f_diff =~ 1*dangerous.disc.prcptn.W3
+
+## mean and variance of subjective/objective measures, all fixed to 0
+   dangerous.disc.prcptn.W3 ~ 1*0
+   dangerous.disc.prcptn.W3 ~~ 0*dangerous.disc.prcptn.W3
+   dangerous.disc.W2.prop ~ 1*0
+   dangerous.disc.W2.prop ~~ 0*dangerous.disc.W2.prop
+## conditional intercept and variance of latent score
+   f_diff ~ 1
+   f_diff ~~ f_diff
+   f_base ~ 1
+   f_base ~~ f_base
+## covariance of latent scores
+   f_base ~~ f_diff
+
+## regress objective exposure on Xs
+   ## baseline total exposure
+      f_base ~ log.total.exp.W2
+   ## demographics
+      f_base ~ age.years + female + edu + household.income
+   ## partisanships
+      f_base ~ canpref.W3 + ideo_str.W3
+   ## motivation and ability factor
+      f_base ~  pol.interest.W2 + pol.know + media.exposure.W2
+
+## regress descprepancy on Xs
+      f_diff ~ discussion.norm.W3 +
+               perceived.opinion.climate.W3 +
+               log.total.exp.W2 +
+               age.years + female + edu + household.income +
+               canpref.W3 + pol.interest.W3 + pol.know + ideo_str.W3 +
+               media.exposure.W2
+'
+
+
+model2.luc <- sem(model2.luc.fm, data = cleaned.data, fixed.x = FALSE)
+summary(model2.luc, fit.measures = TRUE) #standardized = TRUE)
+
+
+model1 <- lm(accuracy.W2 ~
                  ## focal predictor
-                 safe.disc.W1.c +
-                 dangerous.disc.W1.c*discussion.norm.W2.c +
-                 log.raw_sum.W1.wavesum +
+               discussion.norm.W2 +
+               perceived.opinion.climate.W2 +
+               log.total.exp.W1 +
                  ## demographic controls
                  age.years + female + edu + household.income +
                  ## political correlates
-                 ideo.W2.c + pol.interest.W2.c + log.ego.netsize.W1.c + #pol.know.c +
+               canpref.W2 + pol.interest.W2 + pol.know + ideo_str.W2 +
                  ## media exposure
-                 media.exposure.W2.c
+                 media.exposure.W2
                ,
-               data = cleaned.data); summary(model1)
+               data = cleaned.data)
 
-model2 <- lm(exp.disagr.online.prcpt.W3 ~
-               ## focal predictor
-               safe.disc.W2.c +
-               dangerous.disc.W2.c*discussion.norm.W2.c +
-               log.raw_sum.W2.wavesum +
-               ## demographic controls
-               age.years + female + edu + household.income +
-               ## political correlates
-               ideo.W2.c + pol.interest.W2.c + log.ego.netsize.W2.c + #pol.know.c +
-               ## media exposure
-               media.exposure.W2.c
-             ,
-             data = cleaned.data); summary(model2)
+model1.cat <- glm(update.formula(model1, accuracy.cat.W2 ~ .),
+                  binomial("logit"),
+                       data = cleaned.data)
+
+model2 <- lm(accuracy.W3 ~
+              ## focal predictor
+              discussion.norm.W3 +
+              perceived.opinion.climate.W3 +
+              log.total.exp.W2 +
+              ## demographic controls
+              age.years + female + edu + household.income +
+              ## political correlates
+              canpref.W3 + pol.interest.W2 +
+              pol.know + ideo_str.W3 +
+              ## media exposure
+              media.exposure.W2,
+             data = cleaned.data)
+
+model2.cat <- glm(update.formula(model2, accuracy.cat.W3 ~ .),
+                  binomial("logit"),
+                       data = cleaned.data)
+
+model1.luc.out <- model1.luc
+model1.luc <- extract.lm(model1)
+model1.luc@coef.names <- model1.luc@coef.names[-1]
+
+test <- parameterEstimates(model1.luc.out) %>% setDT(.)
+model1.luc@coef <- test[lhs == 'f_diff' & op == '~', est]
+model1.luc@se <- test[lhs == 'f_diff' & op == '~', se]
+model1.luc@pvalues <- test[lhs == 'f_diff' & op == '~', pvalue]
+model1.luc@gof.names <- c("CFI", "TLI", "RMSEA", "P(RMSEA<.05)", "SRMR")
+model1.luc@gof.decimal <- c(TRUE, TRUE, TRUE, TRUE, TRUE)
+model1.luc@gof <- fitMeasures(model1.luc.out)[
+                    c("cfi", "tli", "rmsea", "rmsea.pvalue", "srmr")]
+
+model2.luc.out <- model2.luc
+model2.luc <- extract.lm(model2)
+model2.luc@coef.names <- model2.luc@coef.names[-1]
+
+test <- parameterEstimates(model2.luc.out) %>% setDT(.)
+model2.luc@coef <- test[lhs == 'f_diff' & op == '~', est]
+model2.luc@se <- test[lhs == 'f_diff' & op == '~', se]
+model2.luc@pvalues <- test[lhs == 'f_diff' & op == '~', pvalue]
+model2.luc@gof.names <- c("CFI", "TLI", "RMSEA", "P(RMSEA<.05)", "SRMR")
+model2.luc@gof.decimal <- c(TRUE, TRUE, TRUE, TRUE, TRUE)
+model2.luc@gof <- fitMeasures(model2.luc.out)[
+  c("cfi", "tli", "rmsea", "rmsea.pvalue", "srmr")]
 
 require(texreg)
-screenreg(list(model1, model2),
-          single.row = T, digits = 3, leading.zero = FALSE,
-          custom.model.names = c("Wave 2 Perception", "Wave 3 Perception"),
-          custom.coef.names = c("(Intercept)",
-                                "In-prty msg Exp W1/W2", "Out-prty msg Exp W1/W2",
-                                "Discussion norm W2",
-                                "Total Exp W1/W2 (log)",
-                                "Age (in years)", "Female", "Education", "HH income",
-                                "Ideology W2", "Interest W2",
-                                "Net size W1/W2 (log)", "Media Exposure W2",
-                                "Out-prty X Norm",
-                                "In-prty msg Exp W1/W2", "Out-prty msg Exp W1/W2",
-                                "Total Exp W1/W2 (log)", "Net size W1/W2 (log)",
-                                "Out-prty X Norm"),
-          reorder.coef = c(2:4, 14, 5,12:13, 10:11, 6:9, 1),
-          groups = list("Focal predictors" = 1:2, "Moderators" = 3:4,
-                        "Controls" = 5:9, "Demographics" = 10:13, "Intercept" = 14))
+screenreg(list(model1, model1.cat, model1.luc,
+               model2, model2.cat, model2.luc),
+          stars = c(0.001, 0.01, 0.05, 0.10), digits = 3,
+          custom.model.names = c("OLS W2", "GLM W2", "LCS W2",
+                                 "OLS W3", "GLM W3", "LCS W3"),
+          custom.coef.names = c(
+            "(Intercept)", "Discussion norm W2/W3", "Prcvd Op Climate W2/W3",
+            "Total Exp W1/W2 (log)", "Age (in years)", "Female", "Education",
+            "HH income", "Candidate pref W2/W3", "Interest", "Knowledge",
+            "Ideo Strength W2/W3", "Media Exposure",  "Discussion norm W2/W3",
+            "Prcvd Op Climate W2/W3",  "Total Exp W1/W2 (log)",
+            "Candidate pref W2/W3",  "Ideo Strength W2/W3"),
+          reorder.coef = c(2:3, 9,12,10:11,13,4, 5:8, 1),
+          groups = list("Focal predictors" = 1:4,  "Controls" = 5:8,
+                        "Demographics" = 9:12, "Intercept" = 13))
+
+
 
 
 ## ---------------------------------------- ##
 ## What about cognitive bias and burdens?   ##
 ## (using an average of most recent 3-days) ##
+##                                          ##
+##           ANSWER IS NO!                  ##
 ## ---------------------------------------- ##
 
-cleaned.data <- cleaned.data %>%
-  merge(., exp.dis.daily[day %in% c(16:18),
-              .(safe.disc.W1.recent = mean(safe.disc),
-                dangerous.disc.W1.recent = mean(dangerous.disc)), by = id],
-        by = "id")
+qq.out2.r <- with(cleaned.data,
+                qqplot(x = recent.dangerous.disc.W1,
+                       y = dangerous.disc.prcptn.W2,
+                       plot.it = FALSE)) %>% as.data.frame(.) %>% setDT(.)
 
-cleaned.data <- cleaned.data %>%
-  merge(., exp.dis.daily[day %in% c(25:27),
-                         .(safe.disc.W2.recent = mean(safe.disc),
-                           dangerous.disc.W2.recent = mean(dangerous.disc)), by = id],
-        by = "id")
+qq.out3.r <- with(cleaned.data,
+                qqplot(x = recent.dangerous.disc.W2,
+                       y = dangerous.disc.prcptn.W3,
+                       plot.it = FALSE)) %>% as.data.frame(.) %>% setDT(.)
 
-model3 <- lm(exp.disagr.online.prcpt.W2 ~
-               ## focal predictor
-               safe.disc.W1.c +
-               dangerous.disc.W1.c +
-               discussion.norm.W2.c +
-               log.raw_sum.W1.wavesum +
-               ## demographic controls
-               age.years + female + edu + household.income +
-               ## political correlates
-               ideo.W2.c + pol.interest.W2.c + log.ego.netsize.W1.c + #pol.know.c +
-               ## media exposure
-               media.exposure.W2.c
-             ,
-             data = cleaned.data); summary(model3)
+qq2r <- ggplot(qq.out2.r, aes(x = x, y = y)) +
+  geom_jitter(width = 0.02, color = "grey") + theme_bw() +
+  stat_smooth(aes(group = 1), color = "red", se = FALSE) +
+  geom_segment(aes(x = 0, xend = 1, y = 0, yend = 100),
+               lty = 2, color = "grey") +
+  xlab("W1 Exposure log data (Mean proportion)") +
+  ylab("W2 Perception (% of Exposure to disagreement)") +
+  ggtitle("Quantile-Quantile plot, W1 Exposure vs. W2 Perception")
 
-model4 <- lm(exp.disagr.online.prcpt.W2 ~
-               ## focal predictor
-               safe.disc.W1.recent +
-               dangerous.disc.W1.recent +
-               discussion.norm.W2.c +
-               log.raw_sum.W1.wavesum +
-               ## demographic controls
-               age.years + female + edu + household.income +
-               ## political correlates
-               ideo.W2.c + pol.interest.W2.c + log.ego.netsize.W1.c + #pol.know.c +
-               ## media exposure
-               media.exposure.W2.c
-             ,
-             data = cleaned.data); summary(model4)
-screenreg(list(model3, model4))
+qq3r <- ggplot(qq.out3.r, aes(x = x, y = y)) +
+  geom_jitter(width = 0.02, color = "grey") + theme_bw() +
+  stat_smooth(aes(group = 1), color = "red", se = FALSE) +
+  geom_segment(aes(x = 0, xend = 1, y = 0, yend = 100),
+               lty = 2, color = "grey") +
+  xlab("W2 Exposure log data (Mean proportion)") +
+  ylab("W3 Perception (% of Exposure to disagreement)") +
+  ggtitle("Quantile-Quantile plot, W2 Exposure - W3 Perception")
 
-model5 <- lm(exp.disagr.online.prcpt.W3 ~
-               ## focal predictor
-               safe.disc.W2.c +
-               dangerous.disc.W2.c +
-               discussion.norm.W2.c +
-               log.raw_sum.W2.wavesum +
-               ## demographic controls
-               age.years + female + edu + household.income +
-               ## political correlates
-               ideo.W2.c + pol.interest.W2.c + log.ego.netsize.W2.c + #pol.know.c +
-               ## media exposure
-               media.exposure.W2.c
-             ,
-             data = cleaned.data); summary(model5)
+qq2r + qq3r + plot_layout(nrow = 1)
 
-model6 <- lm(exp.disagr.online.prcpt.W3 ~
-               ## focal predictor
-               safe.disc.W2.recent +
-               dangerous.disc.W2.recent +
-               discussion.norm.W2.c +
-               log.raw_sum.W2.wavesum +
-               ## demographic controls
-               age.years + female + edu + household.income +
-               ## political correlates
-               ideo.W2.c + pol.interest.W2.c + log.ego.netsize.W2.c + #pol.know.c +
-               ## media exposure
-               media.exposure.W2.c
-             ,
-             data = cleaned.data); summary(model6)
-screenreg(list(model5, model6))
+
+## test of equality of two correlation coefficients
+## a comparison of two overlapping correlations based on dependent groups
+require(cocor)
+
+## Wave 2 measures
+cocor(~ dangerous.disc.prcptn.W2 + recent.dangerous.disc.W1 |
+        dangerous.disc.prcptn.W2 + dangerous.disc.W1, data = cleaned.data)
+
+# Comparison between
+#   r.jk (dangerous.disc.prcptn.W2, recent.dangerous.disc.W1) = 0.2433 and
+#   r.jh (dangerous.disc.prcptn.W2, dangerous.disc.W1) = 0.4468
+#   Difference: r.jk - r.jh = -0.2035
+# 95% confidence interval for r.jk - r.jh: [-0.3002, -0.1068]
+## RESULTS INDICATES 3-DAY BASED CORRELATIONS ARE SIGNIFICANTLY WEAKER!
+
+## Wave 3 measures
+cocor(~ dangerous.disc.prcptn.W3 + recent.dangerous.disc.W2 |
+        dangerous.disc.prcptn.W3 + dangerous.disc.W2, data = cleaned.data)
+
+# Comparison between:
+#   r.jk (dangerous.disc.prcptn.W3, recent.dangerous.disc.W2) = 0.3631 and
+#   r.jh (dangerous.disc.prcptn.W3, dangerous.disc.W2) = 0.4265
+#   Difference: r.jk - r.jh = -0.0635
+# 95% confidence interval for r.jk - r.jh: [-0.1411, 0.0136]
+## RESULTS INDICATES THERE IS NO SIGNIFICANT DIFFERENCES
+
+
+
+
+
+## ------------------ ##
+## Outcome evaluation ##
+## ------------------ ##
+
+
 
 
 

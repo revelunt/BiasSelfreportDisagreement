@@ -7,32 +7,6 @@
 ## 1. Data prep functions ##
 ## ---------------------- ##
 
-## function to calculate exposure to disagreement
-## based on ego's and alters' candidate preferences
-
-cal.exposure.disagree <- function(net, canpref, prop = FALSE) {
-
-  out <- t(sapply(1:341, function(x) {
-    tempvec <- net[x, ]
-    exp.same <- canpref[x] == canpref
-    safe.disc <- sum(tempvec[exp.same])
-    dangerous.disc <- sum(tempvec[!exp.same])
-
-    if (isTRUE(prop)) {
-      safe.disc <- safe.disc/sum(tempvec)
-      dangerous.disc <- dangerous.disc/sum(tempvec)
-      if (is.nan(safe.disc)) safe.disc <- 0  ## no exposure
-      if (is.nan(dangerous.disc)) dangerous.disc <- 0 ## no exposure
-    }
-
-    ## output: two-column matrix of safe.disc & dangerous.disc
-    return(c(safe.disc = safe.disc, dangerous.disc = dangerous.disc))
-  }))
-
-  rownames(out) <- 1:341
-  return(out)
-}
-
 
 ## function to perform bivariate permutation test for correlation
 bivariate.perm.test <- function(data, var1, var2,
@@ -46,11 +20,11 @@ bivariate.perm.test <- function(data, var1, var2,
   var1 <- data[, get(var1)]
   var2 <- data[, get(var2)]
 
-  cor.obs <- cor(var1, var2)
+  cor.obs <- cor(var1, var2, use = "complete.obs")
 
   cor.perm <- sort(sapply(seq_len(rep), function(x) {
     var2.resample <- sample(var2, size = length(var2), replace = FALSE)
-    cor.perm <- cor(var1, var2.resample)
+    cor.perm <- cor(var1, var2.resample, use = "complete.obs")
     cor.obs - cor.perm
   }))
 
@@ -96,12 +70,20 @@ diff.perm.test <- function(data, var1, var2,
 
 ## function to process the data.frame adding demographic covariates
 
-add.demographics <- function(data.to.process) {
+add.demographics <- function(data.to.process, dat) {
 
   if (!('dat' %in% ls(envir = .GlobalEnv))) stop("Plz load the raw data in the GlobalEnv!")
   if (!('data.table' %in% class(data.to.process))) stop("data must be data.table type!")
 
   data.copy <- data.to.process
+  ## in wave 1, there are few Rs who did not indicated their initial candidate pref.
+  ## we need to impute their preference using feeling thermo ratings
+  dat[is.na(canpref1), pv254 - pv255] ## all zero
+  ## or stated "would-be candidate" they might vote for Qs
+  dat[, canpref1.imputed := canpref1]
+  dat[is.na(canpref1), canpref1.imputed := car::recode(kv2, "1 = 0; 2 = 1; else = 2")]
+  #dat[, table(canpref1, canpref1.imputed, exclude = NULL)]
+
   ## candidate preference (0 = conservative, 1 = liberal)
   data.copy[, canpref.W1 := dat[, canpref1.imputed]]
   data.copy[, canpref.W2 := dat[, canpref2]]
@@ -140,97 +122,6 @@ add.demographics <- function(data.to.process) {
 ## a set of functions to get sum of connected alters' centrality
 ## in calculating sum of <<alters'>> centrality scores,
 ## measures are  weighted by the number of ego's choice (exposure)
-get.alter.eigen.centr <- function(net_list) {
-
-  net_length <- length(net_list)
-  centr.eigen <- lapply(seq_len(net_length), function(i) {
-
-    ## extract daily exposure network
-    ## make tempt network as matrix object through igraph conversion
-    net_ego <- net_list[[i]]
-    net.tempt <- net_list[[i]] %>%
-      igraph::graph_from_adjacency_matrix(., mode = "directed", weighted = NULL)
-
-    centr.eigen <- igraph::centr_eigen(net.tempt, directed = T, normalized = T, scale = T)
-    centr.eigen <- centr.eigen$vector
-
-    ## bind with ego's own choice, and make a cross-product
-    centr.eigen <- as.matrix(net_ego) %*% centr.eigen
-
-    #alter.centr.eigen <- scale(alter.centr.eigen)[,1]
-    alter.centr.eigen <- cbind(id = 1:341,
-                               alter.centr.eigen = as.vector(centr.eigen),
-                               indices = i)
-    alter.centr.eigen
-  })
-
-  centr.eigen <- do.call(rbind, centr.eigen)
-  require(data.table)
-  centr.eigen <- setDT(as.data.frame(centr.eigen))
-  centr.eigen
-}
-
-## ego's own connection to alter is not considered in
-## deriving the measure
-# get.alter.indegree.centr <- function(net_list) {
-#
-#   net_length <- length(net_list)
-#   alter.centr <- lapply(seq_len(net_length), function(i) {
-#
-#     ## extract daily exposure network
-#     net.tempt <- net_ego <- net_list[[i]] %>% as.matrix(.)
-#
-#     ## for every ego, remove ego from the network and
-#     ## and calculate indegree of rest of alters
-#     ## this gives indegree of alters exclusing ego's own connection
-#     alter.centr.ind <- sapply(seq_len(341), function(v) {
-#
-#       centr.ind <- net.tempt[-v,] %>% apply(., 2, sum)
-#
-#       ## bind with ego's own choice, and make a cross-product
-#       alter.centr.ind <- net_ego[v,] %*% centr.ind
-#       alter.centr.ind <- mean(alter.centr.ind)
-#       alter.centr.ind
-#     })
-#     #alter.centr.ind <- scale(alter.centr.ind)[,1]
-#     alter.centr.ind <- cbind(id = 1:341,
-#                              alter.centr.ind = alter.centr.ind,
-#                              indices = i)
-#     alter.centr.ind
-#   })
-#
-#   alter.centr.ind <- do.call(rbind, alter.centr)
-#   require(data.table)
-#   alter.centr.ind <- setDT(as.data.frame(alter.centr.ind))
-#   alter.centr.ind
-# }
-
-
-## ego's network size
-get.ego.netsize <- function() {
-
-  ## check if "date.range" and "g" are present in the GlobalEnv
-  if (!("date.range" %in% ls(envir = .GlobalEnv))) stop("date.range should be present in the GlobalEnv!")
-  if (!("g" %in% ls(envir = .GlobalEnv))) stop("network data ('g') should be present in the GlobalEnv!")
-  date.range <- get("date.range", envir = .GlobalEnv)
-  g <- get("g", envir = .GlobalEnv)
-
-  ego.netsize <- lapply(seq_len(length(date.range)), function(i) {
-    net.day <- g[[i]] %>%
-      igraph::graph_from_adjacency_matrix(., mode = "directed", weighted = TRUE)
-    netsize <- igraph::degree(net.day, mode = "out", loops = F)
-    netsize <- cbind(id = 1:341, netsize = netsize, day = i)
-    netsize
-    })
-
-  ego.netsize <- do.call(rbind, ego.netsize)
-  require(data.table)
-  ego.netsize <- setDT(as.data.frame(ego.netsize))
-  ego.netsize
-}
-
-
-
 
 ## --------------------- ##
 ## 2. Analysis functions ##

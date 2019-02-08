@@ -88,8 +88,7 @@ dat[, table(canpref1, canpref1.imputed, exclude = NULL)]
 ## calculate the amount of exposure -- daily average approach
 ## wave 2 is from 12/11~13
 ## and we take the dates between first day and the 18th day (until 10th)
-## as the wave 1 log measure, 19th to 21st day (12/11~13) as W2,
-## and the rest of the days as W3 log measures
+## as the wave 1 log measure, 19th to the rest of the days as W2 log measures
 
 exp.dis.daily <-
   lapply(seq_len(length(date.range)),
@@ -228,6 +227,7 @@ cleaned.data[, alter.centr.eigen.W2 :=
   cleaned.data[, ideo_str.W2 := abs(dat$kv49 - 4)]
   cleaned.data[, ideo_str.W3 := abs(dat$hv104 - 4)]
 
+
   ## perceived opinion climate based on candidate preference
   ## defined as perceived prevalence of their in-party supporters vis-a-vis out-party supporters
   ## (excluding third-party candidates)
@@ -242,6 +242,9 @@ cleaned.data[, alter.centr.eigen.W2 :=
   cleaned.data[, perceived.opinion.climate.W3 := rescale(perceived.opinion.climate.W3,
                                                          to = c(0, 100),
                                                          from = c(-100, 100))]
+
+  dat[, psych::alpha(as.matrix(.SD), check.keys = T), .SDcols = c("kv85", "kv86")]
+  cleaned.data[, perceived.opinion.climate.W2.online := rowMeans(dat[, .(kv85, 8 - kv86)])]
 
   ## discussion motivations (invariant across waves)
     ## consistency motivation
