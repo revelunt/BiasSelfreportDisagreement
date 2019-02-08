@@ -344,50 +344,61 @@ setDT(cleaned.data)
   ## instead of using fixed time window, we should look at the
   ## three most recent days based on "nonzero" count
 
+  reader.ids.W1 <- net[reading.date %in% date.range[5:18], reader.id]
+  poster.ids.W1 <- net[reading.date %in% date.range[5:18], poster.id]
+
   cleaned.data <- merge(cleaned.data,
+                        ## filter until W2 (18th days)
+                        net[reading.date %in% date.range[5:18],
+                            .(reading.date, id = reader.id, count = 1,
                         ## same candidate support?
-                        net[, .(reading.date, id = reader.id, count = 1,
-                                exp.disagree = !(
-                                  dat[net[, reader.id], canpref2] ==
-                                    dat[net[, poster.id], canpref2])
+                              exp.disagree = !(
+                                dat[, canpref2[reader.ids.W1]] ==
+                                  dat[, canpref2[poster.ids.W1]])
                         )] %>%
-                        ## filter by date range and derive mean
-                        .[reading.date %in% date.range[16:18],
-                          .(recent.dangerous.disc.W1 =
-                              mean(exp.disagree, na.rm = T),
+                        ## sum of exp by id and date
+                        .[, .(exp.disagree =
+                              sum(exp.disagree, na.rm = T),
+                              count =
+                              sum(count)), by = c("id", "reading.date")] %>%
+                        ## select last three days of nonzero access count
+                        .[count != 0, ] %>%
+                        .[, tail(.SD, 3), by = id] %>%
+                        ## derive mean of disagree and total exposure
+                        .[, .(recent.dangerous.disc.W1 =
+                              sum(exp.disagree)/sum(count),
                             recent.total.exp.W1 =
                               sum(count)), by = id],
                         ## merge by id
                         by = "id", all = TRUE)
 
+  reader.ids.W2 <- net[reading.date %in% date.range[15:27], reader.id]
+  poster.ids.W2 <- net[reading.date %in% date.range[15:27], poster.id]
+
   cleaned.data <- merge(cleaned.data,
-                        ## same candidate support?
-                        net[, .(reading.date, id = reader.id, count = 1,
+                        net[reading.date %in% date.range[15:27],
+                            .(reading.date, id = reader.id, count = 1,
+                                ## same candidate support?
                                 exp.disagree = !(
-                                  dat[net[, reader.id], canpref3] ==
-                                    dat[net[, poster.id], canpref3])
-                        )] %>%
-                        ## filter by date range and derive mean
-                        .[reading.date %in% date.range[25:27],
-                           .(recent.dangerous.disc.W2 =
-                               mean(exp.disagree, na.rm = T),
-                             recent.total.exp.W2 =
-                               sum(count)), by = id],
+                                  dat[, canpref3[reader.ids.W2]] ==
+                                    dat[, canpref3[poster.ids.W2]])
+                              )] %>%
+                          ## sum of exp by id and date
+                          ## sum of exp by id and date
+                          .[, .(exp.disagree =
+                                  sum(exp.disagree, na.rm = T),
+                                count =
+                                  sum(count)), by = c("id", "reading.date")] %>%
+                          ## select last three days of nonzero access count
+                          .[count != 0, ] %>%
+                          .[, tail(.SD, 3), by = id] %>%
+                          ## derive mean of disagree and total exposure
+                          .[, .(recent.dangerous.disc.W2 =
+                                  sum(exp.disagree)/sum(count),
+                                recent.total.exp.W2 =
+                                  sum(count)), by = id],
                         ## merge by id
                         by = "id", all = TRUE)
-
-  cleaned.data[is.na(recent.dangerous.disc.W1),
-               recent.dangerous.disc.W1 := 0]
-
-  cleaned.data[is.na(recent.total.exp.W1),
-               recent.total.exp.W1 := 0]
-
-  cleaned.data[is.na(recent.dangerous.disc.W2),
-               recent.dangerous.disc.W2 := 0]
-
-  cleaned.data[is.na(recent.total.exp.W2),
-               recent.total.exp.W2 := 0]
-
 
   ## calculate duration of exposure??
   ## THIS IS NOT REALLY RELIABLE MEASURE...
