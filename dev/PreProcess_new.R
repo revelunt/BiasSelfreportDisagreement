@@ -209,6 +209,14 @@ setDT(cleaned.data)
   cleaned.data[, pref.certainty.W2 := car::recode(dat$kv4, "8 = NA")]
   cleaned.data[, pref.certainty.W3 := dat$hv17]
 
+  ## awareness and tolerance towards different opinions
+  ## alpha is .86, therefore create a summary scale
+  dat[, .(hv97, hv98, hv99, hv100, hv101)] %>%
+    .[, psych::alpha(as.data.frame(.SD), check.keys = T)]
+  cleaned.data[, tolerance.W3 := rowMeans(dat[, .SD,
+                 .SDcols = c("hv97", "hv98", "hv99", "hv100", "hv101")])]
+
+
   ## ideoloy and strength
   ## ideo: 1 = extremely liberal, 7 = extremely conservative
   ## ideo_str: 0 = weak, 3 = extremely strong

@@ -595,3 +595,57 @@ out.cond <- cbind(var = c("index.modmed",
   ## ------------------ ##
   ## Outcome evaluation ##
   ## ------------------ ##
+
+## Consequences of biased estimate of exposure to disagreement?
+
+  model.certainty.1 <- lm(pref.certainty.W3 ~
+                            ## lagged DV
+                            pref.certainty.W2 +
+                       ## focal X
+                       dangerous.disc.prcptn.W2 +
+                       # dangerous.disc.W2 +
+                       log.total.exp.W2 +
+                       ## demographic controls
+                       age.years + female + edu + household.income +
+                       ## political correlates
+                       canpref.W2 + pol.interest.W2 +
+                         pol.know + ideo_str.W2 + internal.efficacy.W3 +
+                       ## media exposure
+                       media.exposure.W2
+                     , data = cleaned.data)
+
+
+  model.certainty.2 <- lm(update.formula(model.certainty.1,
+                                         . ~ . + dangerous.disc.W2
+                                         - dangerous.disc.prcptn.W2),
+                          data = cleaned.data)
+
+
+
+## another DV????
+  model.tolerance.1 <- lm(discussion.norm.W3 ~
+                            discussion.norm.W2 +
+                            ## focal X
+                            dangerous.disc.prcptn.W2 +
+                            # dangerous.disc.W2 +
+                            log.total.exp.W2 +
+                            ## demographic controls
+                            age.years + female + edu + household.income +
+                            ## political correlates
+                            canpref.W2 + pol.interest.W2 +
+                            pol.know + ideo_str.W2 + internal.efficacy.W3 +
+                            ## media exposure
+                            media.exposure.W2
+                          , data = cleaned.data)
+
+  model.tolerance.2 <- lm(update.formula(model.tolerance.1,
+                                         . ~ . + dangerous.disc.W2
+                                         - dangerous.disc.prcptn.W2),
+                          data = cleaned.data)
+
+  screenreg(list(model.certainty.1, model.certainty.2,
+                 model.tolerance.1, model.tolerance.2),
+            custom.model.names = c("Certainty sbj", "Certainty obj",
+                                   "Tolerance sbj", "Tolerance obj"))
+
+
