@@ -121,7 +121,7 @@ qq2 <- ggplot(qq.out2, aes(x = x, y = y)) +
                lty = 2, color = "grey") +
   xlab("W1 Exposure log data (Mean proportion)") +
   ylab("W2 Perception (% of Exposure to disagreement)") +
-  ggtitle("Quantile-Quantile plot, W1 Exposure vs. W2 Perception")
+  ggtitle("Q-Q plot, W1 Exposure vs. W2 Perception")
 
 qq3 <- ggplot(qq.out3, aes(x = x, y = y)) +
   geom_jitter(width = 0.02, color = "grey") + theme_bw() +
@@ -130,7 +130,7 @@ qq3 <- ggplot(qq.out3, aes(x = x, y = y)) +
                lty = 2, color = "grey") +
   xlab("W2 Exposure log data (Mean proportion)") +
   ylab("W3 Perception (% of Exposure to disagreement)") +
-  ggtitle("Quantile-Quantile plot, W2 Exposure - W3 Perception")
+  ggtitle("Q-Q plot, W2 Exposure - W3 Perception")
 
 qq2 + qq3 + plot_layout(nrow = 1)
 
@@ -142,18 +142,6 @@ bivariate.perm.test(cleaned.data,
 bivariate.perm.test(cleaned.data,
                     "dangerous.disc.W2", "dangerous.disc.prcptn.W3")
 
-## create differences between perception and behavioral measures
-## (+) values indicate the overestimation, and (-) means underestimation
-cleaned.data[, dangerous.disc.W1.prop := dangerous.disc.W1*100]
-cleaned.data[, diff.exp.disagree.W2 :=
-               dangerous.disc.prcptn.W2 - dangerous.disc.W1.prop]
-# cleaned.data[, summary(diff.exp.disagree.W2)]
-cleaned.data[, dangerous.disc.W2.prop := dangerous.disc.W2*100]
-cleaned.data[, diff.exp.disagree.W3 :=
-               dangerous.disc.prcptn.W3 - dangerous.disc.W2.prop]
-# cleaned.data[, summary(diff.exp.disagree.W3)]
-
-
 ## permutation test indicates that the difference between
 ## perception and objective behavior is significantly differ,
 ## in a way that people tend to overestimate the exposure to differences
@@ -163,25 +151,6 @@ diff.perm.test(cleaned.data, rep = 20000,
                "dangerous.disc.prcptn.W3", "dangerous.disc.W2.prop")
 
 
-## ------------------------------- ##
-## some more recoding of variables ##
-## ------------------------------- ##
-
-cleaned.data[, log.total.exp.W1 := log(total.exp.W1 + 1)]
-cleaned.data[, log.total.exp.W2 := log(total.exp.W2 + 1)]
-
-cleaned.data[, accuracy.W2 :=
-               (dangerous.disc.prcptn.W2 - dangerous.disc.W1.prop)/10]
-cleaned.data[, accuracy.cat.W2 := car::recode(accuracy.W2,
-               "0.1:hi = 'over'; else = 'accurate'", as.factor = T)]
-
-cleaned.data[, accuracy.W3 :=
-               (dangerous.disc.prcptn.W3 - dangerous.disc.W2.prop)/10]
-cleaned.data[, accuracy.cat.W3 := car::recode(accuracy.W3,
-               "0.1:hi = 'over'; else = 'accurate'", as.factor = T)]
-
-# cleaned.data$canpref.W2 <- factor(cleaned.data$canpref.W2)
-# cleaned.data$canpref.W3 <- factor(cleaned.data$canpref.W3)
 ## ----------------------------------------------------------- ##
 ## Does overreporting correlated with social desiability bias? ##
 ## we test this by interacting with discussion norm            ##
@@ -284,7 +253,7 @@ model2.luc <- sem(model2.luc.fm, data = cleaned.data, fixed.x = FALSE)
 summary(model2.luc, fit.measures = TRUE) #standardized = TRUE)
 
 
-model1 <- lm(accuracy.W2 ~
+model1 <- lm(dis.accuracy.W2 ~
                  ## focal predictor
                discussion.norm.W2 +
                perceived.opinion.climate.W2 +
@@ -298,11 +267,11 @@ model1 <- lm(accuracy.W2 ~
                ,
                data = cleaned.data)
 
-model1.cat <- glm(update.formula(model1, accuracy.cat.W2 ~ .),
+model1.cat <- glm(update.formula(model1, dis.accuracy.cat.W2 ~ .),
                   binomial("logit"),
                        data = cleaned.data)
 
-model2 <- lm(accuracy.W3 ~
+model2 <- lm(dis.accuracy.W3 ~
               ## focal predictor
               discussion.norm.W3 +
               perceived.opinion.climate.W3 +
@@ -316,7 +285,7 @@ model2 <- lm(accuracy.W3 ~
               media.exposure.W2,
              data = cleaned.data)
 
-model2.cat <- glm(update.formula(model2, accuracy.cat.W3 ~ .),
+model2.cat <- glm(update.formula(model2, dis.accuracy.cat.W3 ~ .),
                   binomial("logit"),
                        data = cleaned.data)
 
@@ -364,6 +333,47 @@ screenreg(list(model1, model1.cat, model1.luc,
                         "Demographics" = 9:12, "Intercept" = 13))
 
 
+model1.agr <- lm(agr.accuracy.W2 ~
+               ## focal predictor
+               discussion.norm.W2 +
+               perceived.opinion.climate.W2 +
+               log.total.exp.W1 +
+               ## demographic controls
+               age.years + female + edu + household.income +
+               ## political correlates
+               canpref.W2 + pol.interest.W2 + pol.know + ideo_str.W2 +
+               ## media exposure
+               media.exposure.W2
+             ,
+             data = cleaned.data)
+
+model1.agr.cat <- glm(update.formula(model1.agr, agr.accuracy.cat.W2 ~ .),
+                  binomial("logit"),
+                  data = cleaned.data)
+
+model2.agr <- lm(agr.accuracy.W3 ~
+               ## focal predictor
+               discussion.norm.W3 +
+               perceived.opinion.climate.W3 +
+               log.total.exp.W2 +
+               ## demographic controls
+               age.years + female + edu + household.income +
+               ## political correlates
+               canpref.W3 + pol.interest.W2 +
+               pol.know + ideo_str.W3 +
+               ## media exposure
+               media.exposure.W2,
+             data = cleaned.data)
+
+model2.agr.cat <- glm(update.formula(model2.agr, agr.accuracy.cat.W3 ~ .),
+                  binomial("logit"),
+                  data = cleaned.data)
+
+screenreg(list(model1.agr, model1.agr.cat,
+               model2.agr, model2.agr.cat),
+          stars = c(0.001, 0.01, 0.05, 0.10), digits = 3,
+          custom.model.names = c("AGR OLS W2", "AGR GLM W2",
+                                 "AGR OLS W3", "AGR GLM W3"))
 
 
 ## ---------------------------------------- ##
@@ -390,7 +400,7 @@ qq2r <- ggplot(qq.out2.r, aes(x = x, y = y)) +
                lty = 2, color = "grey") +
   xlab("W1 Exposure log data (Mean proportion)") +
   ylab("W2 Perception (% of Exposure to disagreement)") +
-  ggtitle("Quantile-Quantile plot, W1 Exposure vs. W2 Perception")
+  ggtitle("Q-Q plot, W1 Recent Exposure vs. W2 Perception")
 
 qq3r <- ggplot(qq.out3.r, aes(x = x, y = y)) +
   geom_jitter(width = 0.02, color = "grey") + theme_bw() +
@@ -399,7 +409,7 @@ qq3r <- ggplot(qq.out3.r, aes(x = x, y = y)) +
                lty = 2, color = "grey") +
   xlab("W2 Exposure log data (Mean proportion)") +
   ylab("W3 Perception (% of Exposure to disagreement)") +
-  ggtitle("Quantile-Quantile plot, W2 Exposure - W3 Perception")
+  ggtitle("Q-Q, W2 Recent Exposure - W3 Perception")
 
 qq2r + qq3r + plot_layout(nrow = 1)
 
@@ -487,11 +497,15 @@ model.poc.1 <- lm(perceived.opinion.climate.W2 ~
               ,
               data = cleaned.data); # summary(model.poc.1)
 
+require(boot)
+require(car)
+require(interactions)
+
 model.poc.1.boot <- car::Boot(model.poc.1, f = coef, method = "case",
                               R = 10000, ncores = 8)
 model.poc.1.boot <- get.boot.stats(model.poc.1.boot, type = "bca")
 
-jtools::interact_plot(model = model.poc.1,
+p5 <- interactions::interact_plot(model = model.poc.1,
                       pred = "dangerous.disc.W1",
                       modx = "pol.know")
 ## in W2, ideo str also moderates the exp to disagree,
@@ -514,15 +528,17 @@ model.poc.2.boot <- car::Boot(model.poc.2, f = coef, method = "case",
                               R = 10000, ncores = 8)
 model.poc.2.boot <- get.boot.stats(model.poc.2.boot, type = "bca")
 
-jtools::interact_plot(model = model.poc.2,
+p6 <- interactions::interact_plot(model = model.poc.2,
                       pred = "dangerous.disc.W2",
                       modx = "pol.know")
 
+p5 + p6 + plot_layout(nrow = 1)
 
 ## since DV distribution is not likely to be normal,
 ## we use bootstrapping (bca interval) instead of regular OLS
 
-screenreg(list(model.poc.1, model.poc.2),
+# DV = Perceived Opinion Climate
+screenreg(list(model.poc.1, model.poc.2), single.row = T,
           custom.model.names = c("POC OLS W2", "POC OLS W3"),
           custom.coef.names = c(
             "(Intercept)", "Out-party Exp W1/W2", "Knowledge",
@@ -537,7 +553,7 @@ screenreg(list(model.poc.1, model.poc.2),
                                 model.poc.2.boot[, 'ulci']),
           reorder.coef = c(2:3,13, 4,9:12, 5:8, 1),
           groups = list("Focal predictors" = 1:3,  "Controls" = 4:7,
-                        "Demographics" = 8:11, "Intercept" = 12))
+                        "Demographics" = 8:11))
 
 ## -------------------------------------------------------- ##
 ## Nonparametric bootstrap-based indirect effect inferences ##
@@ -602,7 +618,7 @@ out.cond <- cbind(var = c("index.modmed",
                             ## lagged DV
                             pref.certainty.W2 +
                        ## focal X
-                       dangerous.disc.prcptn.W2 +
+                         dangerous.disc.prcptn.W3 +
                        # dangerous.disc.W2 +
                        log.total.exp.W2 +
                        ## demographic controls
@@ -617,35 +633,42 @@ out.cond <- cbind(var = c("index.modmed",
 
   model.certainty.2 <- lm(update.formula(model.certainty.1,
                                          . ~ . + dangerous.disc.W2
-                                         - dangerous.disc.prcptn.W2),
+                                         - dangerous.disc.prcptn.W3),
                           data = cleaned.data)
 
+screenreg(list(model.certainty.1, model.certainty.2))
 
 
-## another DV????
-  model.tolerance.1 <- lm(discussion.norm.W3 ~
-                            discussion.norm.W2 +
-                            ## focal X
-                            dangerous.disc.prcptn.W2 +
-                            # dangerous.disc.W2 +
-                            log.total.exp.W2 +
-                            ## demographic controls
-                            age.years + female + edu + household.income +
-                            ## political correlates
-                            canpref.W2 + pol.interest.W2 +
-                            pol.know + ideo_str.W2 + internal.efficacy.W3 +
-                            ## media exposure
-                            media.exposure.W2
-                          , data = cleaned.data)
 
-  model.tolerance.2 <- lm(update.formula(model.tolerance.1,
-                                         . ~ . + dangerous.disc.W2
-                                         - dangerous.disc.prcptn.W2),
-                          data = cleaned.data)
+## For simulation inference
+require(MASS)
+require(data.table)
+require(psych)
+require(lm.beta)
+require(corpcor)
 
-  screenreg(list(model.certainty.1, model.certainty.2,
-                 model.tolerance.1, model.tolerance.2),
-            custom.model.names = c("Certainty sbj", "Certainty obj",
-                                   "Tolerance sbj", "Tolerance obj"))
+var.names <- unique(c(names(coef(model.certainty.1)),
+                      names(coef(model.certainty.2))))
+var.names <- c(var.names[-1])
+cor.obs <- cleaned.data[, cor(.SD, use = "pairwise.complete.obs"),
+                        .SDcols = var.names]
+mu <- cleaned.data[, apply(.SD, 2, mean, na.rm = T), .SDcols = var.names]
+
+## simulation conditions
+cond <- expand.grid(
+  N.sample = c(341, 1000, 5000),
+  target.corr = c(-0.118, -0.04, 0.05, 0.12, 0.22, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6)
+)
+
+reps <- mapply(sim.MC,
+               N.sample = cond$N.sample,
+               target.corr = cond$target.corr,
+               SIMPLIFY = FALSE)
+
+sim.results <- do.call("rbind", reps) %>% setDT(.)
+sim.results[, zero.order.cor :=
+              sapply(sim.results[, target.corr], get.new.bivariate.cor)]
+
+sim.results[, mean(sbj.coef.agree.with.obj), by = c("zero.order.cor", "N.sample")]
 
 

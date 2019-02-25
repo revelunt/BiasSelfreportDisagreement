@@ -12,6 +12,8 @@ new.packages <- list.of.packages[!(list.of.packages %in%
 if(length(new.packages)) devtools::install_cran(new.packages, dependencies = T)
 if(!("patchwork" %in% installed.packages()[,"Package"]))
   devtools::install_github("thomasp85/patchwork")
+if(!("interactions" %in% installed.packages()[,"Package"]))
+  source("https://install-github.me/jacob-long/interactions")
 
 ## automatically setting working directories
 # setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
@@ -156,28 +158,42 @@ cleaned.data <- merge(cleaned.data,
 ## Perceptoin measure, W2
 dat[, W2.disagree.for.liberal :=
       rowSums(.SD), .SDcols = c("kv61", "kv62")]
+dat[, W2.agree.for.liberal := kv60]
 dat[, W2.disagree.for.conservative :=
       rowSums(.SD), .SDcols = c("kv60", "kv61")]
+dat[, W2.agree.for.conservative := kv62]
 dat[canpref2 == 1,
     W2.disagree.online.perception := W2.disagree.for.liberal]
+dat[canpref2 == 1,
+    W2.agree.online.perception := W2.agree.for.liberal]
 dat[canpref2 == 0,
     W2.disagree.online.perception := W2.disagree.for.conservative]
+dat[canpref2 == 0,
+    W2.agree.online.perception := W2.agree.for.conservative]
 
 cleaned.data <- cleaned.data %>%
-  cbind(., dangerous.disc.prcptn.W2 = dat$W2.disagree.online.perception)
+  cbind(., dangerous.disc.prcptn.W2 = dat$W2.disagree.online.perception,
+           safe.disc.prcptn.W2 = dat$W2.agree.online.perception)
 
 ## Perceptoin measure, W3
 dat[, W3.disagree.for.liberal :=
       rowSums(.SD), .SDcols = c("hv116", "hv117")]
+dat[, W3.agree.for.liberal := hv115]
 dat[, W3.disagree.for.conservative :=
       rowSums(.SD), .SDcols = c("hv115", "hv116")]
+dat[, W3.agree.for.conservative := hv117]
 dat[canpref3 == 1,
     W3.disagree.online.perception := W3.disagree.for.liberal]
+dat[canpref3 == 1,
+    W3.agree.online.perception := W3.agree.for.liberal]
 dat[canpref3 == 0,
     W3.disagree.online.perception := W3.disagree.for.conservative]
+dat[canpref3 == 0,
+    W3.agree.online.perception := W3.agree.for.conservative]
 
 cleaned.data <- cleaned.data %>%
-  cbind(., dangerous.disc.prcptn.W3 = dat$W3.disagree.online.perception)
+  cbind(., dangerous.disc.prcptn.W3 = dat$W3.disagree.online.perception,
+           safe.disc.prcptn.W3 = dat$W3.agree.online.perception)
 
 
 ## get ego's network size
@@ -283,6 +299,9 @@ setDT(cleaned.data)
   cleaned.data[, pol.interest.W3 :=
                  rowMeans(dat[, .SD, .SDcols = c("hv238", "hv239")] )]
 
+  ## self-reported knowledge
+  cleaned.data[, know.self.W3 := dat$hv240]
+
   ## media exposure (in hours)
     ## remove "NaN" in data -- W2
     dat[is.na(kv194), kv194 := 0 ]
@@ -343,14 +362,19 @@ setDT(cleaned.data)
   cleaned.data[, discussion.norm.W3 := rowMeans(
     dat[, .SD, .SDcols = c("hv173", "hv174", "hv175", "hv176", "hv177")])]
 
+  ## political participation, W1 (W1 only)
+  dat[, pv170:pv176][, psych::alpha(as.data.frame(.SD), check.keys = T)]
+  cleaned.data[, ppart.W1 := rowMeans(
+    dat[, .SD, .SDcols = c("pv170", "pv171", "pv172", "pv173",
+                           "pv174", "pv175", "pv176")])]
 
 
 ## more recent exposure? using three most recent days
 
   ## in deriving this measure, we should account the fact that
-  ## not all Rs have accessed the forum every day.
-  ## instead of using fixed time window, we should look at the
-  ## three most recent days based on "nonzero" count
+  ## not all Rs have accessed the forum same day.
+  ## So instead of using fixed time window, we should look at the
+  ## three most recent days per user based on "nonzero" count
 
   reader.ids.W1 <- net[reading.date %in% date.range[5:18], reader.id]
   poster.ids.W1 <- net[reading.date %in% date.range[5:18], poster.id]
@@ -418,3 +442,49 @@ setDT(cleaned.data)
   # net[, duration :=
   # difftime(reading.date.time, prior.exp.time, units = "mins")]
 
+  ## create differences between perception and behavioral measures
+  ## (+) values indicate the overestimation, and (-) means underestimation
+  cleaned.data[, dangerous.disc.W1.prop := dangerous.disc.W1*100]
+  cleaned.data[, diff.exp.disagree.W2 :=
+                 dangerous.disc.prcptn.W2 - dangerous.disc.W1.prop]
+  # cleaned.data[, summary(diff.exp.disagree.W2)]
+  cleaned.data[, dangerous.disc.W2.prop := dangerous.disc.W2*100]
+  cleaned.data[, diff.exp.disagree.W3 :=
+                 dangerous.disc.prcptn.W3 - dangerous.disc.W2.prop]
+  # cleaned.data[, summary(diff.exp.disagree.W3)]
+
+  ## ------------------------------- ##
+  ## some more recoding of variables ##
+  ## ------------------------------- ##
+
+  cleaned.data[, log.total.exp.W1 := log(total.exp.W1 + 1)]
+  cleaned.data[, log.total.exp.W2 := log(total.exp.W2 + 1)]
+
+  cleaned.data[, dis.accuracy.W2 :=
+                 (dangerous.disc.prcptn.W2 - dangerous.disc.W1.prop)/10]
+  cleaned.data[, agr.accuracy.W2 :=
+                 ((safe.disc.prcptn.W2 - (1 - dangerous.disc.W1)*100))/10]
+  cleaned.data[, dis.accuracy.cat.W2 :=
+                 car::recode(dis.accuracy.W2,
+                             "0.1:hi = 'over'; else = 'accurate'",
+                             as.factor = T)]
+  cleaned.data[, agr.accuracy.cat.W2 :=
+                 car::recode(agr.accuracy.W2,
+                             "0.1:hi = 'over'; else = 'accurate'",
+                             as.factor = T)]
+
+  cleaned.data[, dis.accuracy.W3 :=
+                 (dangerous.disc.prcptn.W3 - dangerous.disc.W2.prop)/10]
+  cleaned.data[, agr.accuracy.W3 :=
+                 ((safe.disc.prcptn.W3 - (1 - dangerous.disc.W2)*100))/10]
+  cleaned.data[, dis.accuracy.cat.W3 :=
+                 car::recode(dis.accuracy.W3,
+                             "0.1:hi = 'over'; else = 'accurate'",
+                             as.factor = T)]
+  cleaned.data[, agr.accuracy.cat.W3 :=
+                 car::recode(agr.accuracy.W3,
+                             "0.1:hi = 'over'; else = 'accurate'",
+                             as.factor = T)]
+
+  # cleaned.data$canpref.W2 <- factor(cleaned.data$canpref.W2)
+  # cleaned.data$canpref.W3 <- factor(cleaned.data$canpref.W3)

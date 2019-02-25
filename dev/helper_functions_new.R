@@ -178,6 +178,7 @@ get.boot.stats <- function(boot.out, type = "bca", ...) {
   n.now <- length(boot.out$t0)
   ## get CIs (default by bca, )
   require(parallel)
+  require(boot)
   temp <- mclapply(1:n.now, function(i) {
     if (type == "perc") {
       cis <- boot.ci(boot.out, index = i, type = type, ...)
@@ -297,3 +298,89 @@ est.cond.indirect <- function(dat, ## data frame to pass for bootstrapping
                   dir.effect = dir.effect)
   return(return.vec)
 }
+
+
+
+## simulation functions
+get.new.cor <- function(cor.obs, target.corr) {
+  partial.cor <- corpcor::cor2pcor(cor.obs)
+  colnames(partial.cor) <- rownames(partial.cor) <- var.names
+  partial.cor["dangerous.disc.W2", "dangerous.disc.prcptn.W3"] <- target.corr
+  partial.cor["dangerous.disc.prcptn.W3", "dangerous.disc.W2"] <- target.corr
+  new.cor <- corpcor::pcor2cor(partial.cor)
+  colnames(new.cor) <- rownames(new.cor) <- var.names
+  new.cor
+}
+
+get.new.bivariate.cor <- function(target.corr) {
+  new.cor <- get.new.cor(cor.obs = cor.obs, target.corr)
+  new.bivariate.cor <- new.cor["dangerous.disc.prcptn.W3", "dangerous.disc.W2"]
+  new.bivariate.cor
+}
+
+
+## define main simulation function
+sim.MC <- function(N.sample, target.corr) {
+
+  sim.run <- mclapply(seq_len(1000), function(k) { ## based on 5000 replications
+    ## simulate the data given N based on mean and cov of exogenous variables
+    ## and manipulate partial correlation of subjective vs. objective measure,
+    ## derive modified zero-order correlation coef. and simulate dataset
+    simulated.data <- mvrnorm(n = N.sample,
+                              mu = mu,
+                              Sigma = get.new.cor(cor.obs, target.corr),
+                              empirical = TRUE)
+    colnames(simulated.data) <- var.names
+    simulated.data <- as.data.frame(simulated.data) %>% setDT(.)
+
+    ## create pref.certainty.W3 based on model using obj measure
+    ## and add random noise to simulate Y values
+    simulated.data[, pref.certainty.W3 :=
+                     predict(model.certainty.2, newdata = simulated.data) +
+                     rnorm(.N, mean = 0,
+                           sd = sd(model.certainty.2$residuals))]
+
+
+    ## Using simulated data, refit the model, recover coefficients
+    model.sbj.resample <- lm(pref.certainty.W3 ~ pref.certainty.W2 +
+                               dangerous.disc.prcptn.W3 + log.total.exp.W2 +
+                               age.years + female + edu + household.income +
+                               canpref.W2 + pol.interest.W2 + pol.know +
+                               ideo_str.W2 + internal.efficacy.W3 +
+                               media.exposure.W2,
+                             data = simulated.data) ## DV = certainty
+    model.obj.resample <- lm(pref.certainty.W3 ~ pref.certainty.W2 +
+                               dangerous.disc.W2 +log.total.exp.W2 +
+                               age.years + female + edu + household.income +
+                               canpref.W2 + pol.interest.W2 + pol.know +
+                               ideo_str.W2 + internal.efficacy.W3 +
+                               media.exposure.W2,
+                             data = simulated.data) ## DV = certainty
+
+    ## grap standarzied coefficietns and their significance
+    coef.sbj <- coef(summary(lm.beta(model.sbj.resample)))['dangerous.disc.prcptn.W3', 1]
+    coef.obj <- coef(summary(lm.beta(model.obj.resample)))['dangerous.disc.W2', 1]
+
+    sig.sbj <- coef(summary(model.sbj.resample))['dangerous.disc.prcptn.W3', 4] < .05
+    sig.obj <- coef(summary(model.obj.resample))['dangerous.disc.W2', 4] < .05
+
+    est <- c(N.sample,
+             target.corr,
+             abs(coef.sbj - coef.obj), ## relative size of bias, abs of difference
+             coef.sbj/coef.obj, ## relative size of subjective coef
+             coef.obj, ## size of effect
+             sig.obj, ## true effect significant?
+             sig.obj == sig.sbj) ## whether results agree?
+    names(est) <- c("N.sample", "target.corr", "bias", "relative.size.sbj",
+                    "coef.obj", "coef.obj.sig", "sbj.coef.agree.with.obj")
+    est
+
+  }, mc.cores = parallel::detectCores(T))
+
+  ## gather replication results
+  sim.run <- do.call("rbind", sim.run)
+  sim.run <- data.frame(sim.run) %>% setDT(.)
+  sim.run
+}
+
+
