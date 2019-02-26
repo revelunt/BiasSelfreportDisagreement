@@ -614,11 +614,19 @@ out.cond <- cbind(var = c("index.modmed",
 
 ## Consequences of biased estimate of exposure to disagreement?
 
+terms <- c("pref.certainty.W3", "pref.certainty.W2", "dangerous.disc.W2",
+           "dangerous.disc.prcptn.W3", "log.total.exp.W2", "age.years",
+           "female", "edu", "household.income", "canpref.W2",
+           "pol.interest.W2", "pol.know", "ideo_str.W2",
+           "internal.efficacy.W3", "media.exposure.W2")
+index <- cleaned.data[, .SD, .SDcols = terms] %>% complete.cases(.)
+cleaned.data[, dangerous.disc.prcptn.W3.r := dangerous.disc.prcptn.W3/100]
+
   model.certainty.1 <- lm(pref.certainty.W3 ~
                             ## lagged DV
                             pref.certainty.W2 +
                        ## focal X
-                         dangerous.disc.prcptn.W3 +
+                         dangerous.disc.prcptn.W3.r +
                        # dangerous.disc.W2 +
                        log.total.exp.W2 +
                        ## demographic controls
@@ -628,16 +636,15 @@ out.cond <- cbind(var = c("index.modmed",
                          pol.know + ideo_str.W2 + internal.efficacy.W3 +
                        ## media exposure
                        media.exposure.W2
-                     , data = cleaned.data)
+                     , data = cleaned.data[index, ])
 
 
   model.certainty.2 <- lm(update.formula(model.certainty.1,
                                          . ~ . + dangerous.disc.W2
                                          - dangerous.disc.prcptn.W3),
-                          data = cleaned.data)
+                          data = cleaned.data[index, ])
 
 screenreg(list(model.certainty.1, model.certainty.2))
-
 
 
 ## For simulation inference
@@ -648,27 +655,63 @@ require(lm.beta)
 require(corpcor)
 
 var.names <- unique(c(names(coef(model.certainty.1)),
-                      names(coef(model.certainty.2))))
-var.names <- c(var.names[-1])
-cor.obs <- cleaned.data[, cor(.SD, use = "pairwise.complete.obs"),
-                        .SDcols = var.names]
-mu <- cleaned.data[, apply(.SD, 2, mean, na.rm = T), .SDcols = var.names]
+                      names(coef(model.certainty.2)))) %>% .[-1]
+mu <- cleaned.data[index, apply(.SD, 2, mean), .SDcols = var.names]
+sds <- cleaned.data[index, apply(.SD, 2, sd), .SDcols = var.names]
+focal.vars <- c("dangerous.disc.W2", "dangerous.disc.prcptn.W3.r")
+cor.obs <- cleaned.data[index, cor(.SD), .SDcols = var.names]
+
+test <- lapply(c(341, 1000, 5000), function(k) sim.MC.power.obj(sample_n = k))
+test <- do.call("rbind", test) %>% setDT(.)
+test[sample_n == 341, mean(sig < 0.05)] ## empirical power when sample size = 341
+test[sample_n == 1000, mean(sig < 0.05)] ## 0.937 when alpha = 0.05
+test[sample_n == 1000, mean(sig < 0.01)] ## 0.843 when alpha = 0.01
+test[sample_n == 5000, mean(sig < 0.001)]
+
+test2 <- lapply(c(341, 1000, 5000), function(k) sim.MC.power.sbj(sample_n = k))
+test2 <- do.call("rbind", test2) %>% setDT(.)
+test2[sample_n == 341, mean(sig < 0.05)] ## empirical power when sample size = 341
+test2[sample_n == 1000, mean(sig < 0.05)] ## 0.949 when alpha = 0.05
+test2[sample_n == 1000, mean(sig < 0.01)] ## 0.844 when alpha = 0.01
+test2[sample_n == 5000, mean(sig < 0.001)]
 
 ## simulation conditions
 cond <- expand.grid(
-  N.sample = c(341, 1000, 5000),
-  target.corr = c(-0.118, -0.04, 0.05, 0.12, 0.22, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6)
+  sample_n = c(341, 1000, 5000),
+  target.corr = seq(from = 0, to = 0.9, by = 0.1)
 )
 
 reps <- mapply(sim.MC,
-               N.sample = cond$N.sample,
+               sample_n = cond$sample_n,
                target.corr = cond$target.corr,
                SIMPLIFY = FALSE)
 
 sim.results <- do.call("rbind", reps) %>% setDT(.)
-sim.results[, zero.order.cor :=
-              sapply(sim.results[, target.corr], get.new.bivariate.cor)]
 
-sim.results[, mean(sbj.coef.agree.with.obj), by = c("zero.order.cor", "N.sample")]
 
+## bias, relative.size.sbj, coef.obj, sbj.coef.agree.with.obj
+
+sim.results[, .(agree = mean(sbj.coef.agree.with.obj),
+                llci = prop.cis(mean(sbj.coef.agree.with.obj), 1000)[1],
+                ulci = prop.cis(mean(sbj.coef.agree.with.obj), 1000)[2]),
+            by = c("target.corr", "sample_n")] %>%
+  ggplot(., aes(x = target.corr, y = agree, color = factor(sample_n))) +
+  geom_smooth(aes(ymin = llci, ymax = ulci), alpha = 0.3) +
+  #geom_ribbon(aes(ymin = llci, ymax = ulci, color = factor(sample_n)), alpha = 0.3) +
+  theme_bw() +
+  xlab("Zero-order correlation between subjective and objective measure") +
+  ylab("Proportion of two results agree") +
+  geom_vline(xintercept = 0.41041873, linetype = 2, col = "red")
+
+sim.results[, .(median.relative.size = median(relative.size.sbj),
+                llci = quantile(relative.size.sbj, 0.025),
+                ulci = quantile(relative.size.sbj, 0.975)),
+            by = c("target.corr", "sample_n")] %>%
+  ggplot(., aes(x = target.corr, y = median.relative.size, color = factor(sample_n))) +
+  geom_smooth(method = 'loess', aes(ymin = llci, ymax = ulci), alpha = 0.3) +
+  #geom_line(aes(color = factor(sample_n))) +
+  theme_bw() +
+  xlab("Zero-order correlation between subjective and objective measure") +
+  ylab("Relative size of subjective vs. objective measure") +
+  geom_hline(yintercept = 0.7516209, linetype = 2, col = "red")
 
