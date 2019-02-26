@@ -308,7 +308,7 @@ sim.MC.power.obj <- function(sample_n) {
   mu0 <- cleaned.data[, apply(.SD, 2, mean, na.rm = T), .SDcols = var.names]
   sigma <- cov(cleaned.data[, .SD, .SDcols = var.names], use = "complete.obs")
 
-  sim.run <- mclapply(seq_len(1000), function(k) { ## based on 1000 replications
+  sim.run <- mclapply(seq_len(5000), function(k) { ## based on 1000 replications
     ## simulate the data given N based on mean and cov of exogenous variables
     ## and manipulate partial correlation of subjective vs. objective measure,
     ## derive modified zero-order correlation coef. and simulate dataset
@@ -347,7 +347,7 @@ sim.MC.power.sbj <- function(sample_n) {
   mu0 <- cleaned.data[, apply(.SD, 2, mean, na.rm = T), .SDcols = var.names]
   sigma <- cov(cleaned.data[, .SD, .SDcols = var.names], use = "complete.obs")
 
-  sim.run <- mclapply(seq_len(1000), function(k) { ## based on 1000 replications
+  sim.run <- mclapply(seq_len(5000), function(k) { ## based on 1000 replications
     ## simulate the data given N based on mean and cov of exogenous variables
     ## and manipulate partial correlation of subjective vs. objective measure,
     ## derive modified zero-order correlation coef. and simulate dataset

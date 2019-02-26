@@ -641,11 +641,15 @@ cleaned.data[, dangerous.disc.prcptn.W3.r := dangerous.disc.prcptn.W3/100]
 
   model.certainty.2 <- lm(update.formula(model.certainty.1,
                                          . ~ . + dangerous.disc.W2
-                                         - dangerous.disc.prcptn.W3),
+                                         - dangerous.disc.prcptn.W3.r),
                           data = cleaned.data[index, ])
 
 screenreg(list(model.certainty.1, model.certainty.2))
 
+coef.sbj <- coef(summary(model.certainty.1))['dangerous.disc.prcptn.W3.r', 1]
+coef.obj <- coef(summary(model.certainty.2))['dangerous.disc.W2', 1]
+relative.size.sbj.obs <- coef.sbj/coef.obj
+bias.obs <- abs(coef.sbj - coef.obj)
 
 ## For simulation inference
 require(MASS)
@@ -661,24 +665,11 @@ sds <- cleaned.data[index, apply(.SD, 2, sd), .SDcols = var.names]
 focal.vars <- c("dangerous.disc.W2", "dangerous.disc.prcptn.W3.r")
 cor.obs <- cleaned.data[index, cor(.SD), .SDcols = var.names]
 
-test <- lapply(c(341, 1000, 5000), function(k) sim.MC.power.obj(sample_n = k))
-test <- do.call("rbind", test) %>% setDT(.)
-test[sample_n == 341, mean(sig < 0.05)] ## empirical power when sample size = 341
-test[sample_n == 1000, mean(sig < 0.05)] ## 0.937 when alpha = 0.05
-test[sample_n == 1000, mean(sig < 0.01)] ## 0.843 when alpha = 0.01
-test[sample_n == 5000, mean(sig < 0.001)]
-
-test2 <- lapply(c(341, 1000, 5000), function(k) sim.MC.power.sbj(sample_n = k))
-test2 <- do.call("rbind", test2) %>% setDT(.)
-test2[sample_n == 341, mean(sig < 0.05)] ## empirical power when sample size = 341
-test2[sample_n == 1000, mean(sig < 0.05)] ## 0.949 when alpha = 0.05
-test2[sample_n == 1000, mean(sig < 0.01)] ## 0.844 when alpha = 0.01
-test2[sample_n == 5000, mean(sig < 0.001)]
-
+# source("power_cal.R")
 ## simulation conditions
 cond <- expand.grid(
   sample_n = c(341, 1000, 5000),
-  target.corr = seq(from = 0, to = 0.9, by = 0.1)
+  target.corr = seq(from = 0, to = 0.95, by = 0.05)
 )
 
 reps <- mapply(sim.MC,
@@ -687,31 +678,48 @@ reps <- mapply(sim.MC,
                SIMPLIFY = FALSE)
 
 sim.results <- do.call("rbind", reps) %>% setDT(.)
-
+save(sim.results, file = "sim.results.Rdata")
 
 ## bias, relative.size.sbj, coef.obj, sbj.coef.agree.with.obj
 
-sim.results[, .(agree = mean(sbj.coef.agree.with.obj),
+## whether significance of sbj measure agree with obj measures?
+p3_1 <- sim.results[, .(agree = mean(sbj.coef.agree.with.obj),
                 llci = prop.cis(mean(sbj.coef.agree.with.obj), 1000)[1],
                 ulci = prop.cis(mean(sbj.coef.agree.with.obj), 1000)[2]),
             by = c("target.corr", "sample_n")] %>%
   ggplot(., aes(x = target.corr, y = agree, color = factor(sample_n))) +
   geom_smooth(aes(ymin = llci, ymax = ulci), alpha = 0.3) +
-  #geom_ribbon(aes(ymin = llci, ymax = ulci, color = factor(sample_n)), alpha = 0.3) +
-  theme_bw() +
   xlab("Zero-order correlation between subjective and objective measure") +
-  ylab("Proportion of two results agree") +
-  geom_vline(xintercept = 0.41041873, linetype = 2, col = "red")
+  ylab("Proportion of two results agree") + theme_bw() +
+  scale_x_continuous(breaks = seq(0, 0.95, 0.1)) +
+  theme(legend.position = "none") +
+  geom_vline(xintercept = cor.obs[2,14], linetype = 2, col = "red")
 
-sim.results[, .(median.relative.size = median(relative.size.sbj),
+## absolute bias of sbj measure agree against obj measures
+p3_2 <- sim.results[, .(bias = median(bias),
+                llci = quantile(bias, 0.025),
+                ulci = quantile(bias, 0.975)),
+            by = c("target.corr", "sample_n")] %>%
+  ggplot(., aes(x = target.corr, y = bias, group = factor(sample_n))) +
+  geom_ribbon(aes(ymin = llci, ymax = ulci), fill = "grey70", alpha = 0.3) +
+  geom_smooth(method = "lm", se = FALSE, aes(color = factor(sample_n))) +
+  xlab("") + ylab("Mean bias of subjective measure") + theme_bw() +
+  geom_hline(yintercept = bias.obs, linetype = 2, col = "red") +
+  geom_vline(xintercept = cor.obs[2,14], linetype = 2, col = "grey") +
+  facet_grid(~ sample_n) + theme(legend.position = "none")
+
+## relative size of subjective measure
+p3_3 <- sim.results[, .(median.relative.size = median(relative.size.sbj),
                 llci = quantile(relative.size.sbj, 0.025),
                 ulci = quantile(relative.size.sbj, 0.975)),
             by = c("target.corr", "sample_n")] %>%
-  ggplot(., aes(x = target.corr, y = median.relative.size, color = factor(sample_n))) +
-  geom_smooth(method = 'loess', aes(ymin = llci, ymax = ulci), alpha = 0.3) +
-  #geom_line(aes(color = factor(sample_n))) +
-  theme_bw() +
+  ggplot(., aes(x = target.corr, y = median.relative.size)) +
+  geom_ribbon(aes(ymin = llci, ymax = ulci), fill = "grey70", alpha = 0.3) +
+  geom_smooth(method = "lm", se = FALSE, aes(color = factor(sample_n))) +
   xlab("Zero-order correlation between subjective and objective measure") +
-  ylab("Relative size of subjective vs. objective measure") +
-  geom_hline(yintercept = 0.7516209, linetype = 2, col = "red")
+  ylab("Relative size of subjective vs. objective measure") + theme_bw() +
+  geom_hline(yintercept = relative.size.sbj.obs, linetype = 2, col = "red") +
+  scale_colour_discrete(name = "Sample N") +
+  theme(legend.position = "bottom") + facet_grid(~ sample_n)
 
+p3_1 + p3_2 + p3_3 + plot_layout(nrow = 3)
