@@ -6,7 +6,8 @@ rm(list = ls())
 ## install required packages and dependencies automatically
 list.of.packages <- c("car", "psych","texreg","rstudioapi","data.table",
                       "devtools", "formula.tools", "haven", "magrittr",
-                      "igraph", "intergraph", "ggplot2", "jtools", "plotROC")
+                      "igraph", "intergraph", "ggplot2", "jtools", "plotROC",
+                      "pscl", "rcompanion")
 new.packages <- list.of.packages[!(list.of.packages %in%
                                      installed.packages()[,"Package"])]
 if(length(new.packages)) devtools::install_cran(new.packages, dependencies = T)
@@ -119,6 +120,10 @@ cleaned.data <- merge(cleaned.data,
 ## calculate the amount of exposure to diagreement -- mean of daily average ##
 ## ------------------------------------------------------------------------ ##
 
+## ----------- ##
+## OLD MEASURE ##
+## ----------- ##
+
 cleaned.data <- merge(cleaned.data,
                       net[, .(reading.date, id = reader.id,
                               exp.disagree = !(
@@ -150,6 +155,41 @@ cleaned.data <- merge(cleaned.data,
                                 sum(dangerous.disc.dlyavg.W2)/13), by = id],
                       by = "id", all = TRUE)
 
+## Time-of-exposure tally compared to daily, forming prior-exposure-relative score
+
+# cleaned.data <- merge(cleaned.data,
+#                       net[, .(reading.date, id = reader.id,
+#                               exp.disagree = !(
+#                                 dat[net[, reader.id], canpref2] ==
+#                                   dat[net[, poster.id], canpref2])
+#                       )] %>%
+#                         .[reading.date %in% date.range[5:18],
+#                           .(daily.mean.exp.disagree =
+#                               mean(exp.disagree, na.rm = T)),
+#                           by = c("id", "reading.date")] %>%
+#                         .[, .(dangerous.disc.online.tally.W1 =
+#                                 ## daily average means we need to divide by no. of days
+#                                 ## but not by just simple mean....
+#                                 online.tally(daily.mean.exp.disagree)), by = id],
+#                       by = "id", all = TRUE)
+#
+# cleaned.data <- merge(cleaned.data,
+#                       net[, .(reading.date, id = reader.id,
+#                               exp.disagree = !(
+#                                 dat[net[, reader.id], canpref2] ==
+#                                   dat[net[, poster.id], canpref2])
+#                       )] %>%
+#                         .[reading.date %in% date.range[15:27],
+#                           .(daily.mean.exp.disagree =
+#                               mean(exp.disagree, na.rm = T)),
+#                           by = c("id", "reading.date")] %>%
+#                         .[, .(dangerous.disc.online.tally.W2 =
+#                                 ## daily average means we need to divide by no. of days
+#                                 ## but not by just simple mean....
+#                                 online.tally(daily.mean.exp.disagree)), by = id],
+#                       by = "id", all = TRUE)
+
+
 
 ## ----------------------------------------------- ##
 ## self-reported amount of exposure to diagreement ##
@@ -172,8 +212,8 @@ dat[canpref2 == 0,
     W2.agree.online.perception := W2.agree.for.conservative]
 
 cleaned.data <- cleaned.data %>%
-  cbind(., dangerous.disc.prcptn.W2 = dat$W2.disagree.online.perception,
-           safe.disc.prcptn.W2 = dat$W2.agree.online.perception)
+  cbind(., dangerous.disc.prcptn.W2 = dat$W2.disagree.online.perception/100,
+           safe.disc.prcptn.W2 = dat$W2.agree.online.perception/100)
 
 ## Perceptoin measure, W3
 dat[, W3.disagree.for.liberal :=
@@ -192,8 +232,8 @@ dat[canpref3 == 0,
     W3.agree.online.perception := W3.agree.for.conservative]
 
 cleaned.data <- cleaned.data %>%
-  cbind(., dangerous.disc.prcptn.W3 = dat$W3.disagree.online.perception,
-           safe.disc.prcptn.W3 = dat$W3.agree.online.perception)
+  cbind(., dangerous.disc.prcptn.W3 = dat$W3.disagree.online.perception/100,
+           safe.disc.prcptn.W3 = dat$W3.agree.online.perception/100)
 
 
 ## get ego's network size
@@ -249,18 +289,18 @@ setDT(cleaned.data)
   ## their in-party supporters vis-a-vis out-party supporters
   ## (excluding third-party candidates)
   ## (+) values means more perceived prevalence of in-party supporters
-  cleaned.data[canpref.W2 == 1,
+  cleaned.data[canpref.W2 == 1, ## liberal canddiate
                perceived.opinion.climate.W2 :=
-                 dat[canpref2 == 1, kv65 - kv64]]
+                 dat[canpref2 == 1, 2*kv65 - 100]] ## liberal minus conservative
   cleaned.data[canpref.W2 == 0,
                perceived.opinion.climate.W2 :=
-                 dat[canpref2 == 0, kv64 - kv65]]
+                 dat[canpref2 == 0, 2*kv64 - 100]]
   cleaned.data[canpref.W3 == 1,
                perceived.opinion.climate.W3 :=
-                 dat[canpref3 == 1, hv120 - hv119]]
+                 dat[canpref3 == 1, 2*hv120 - 100]]
   cleaned.data[canpref.W3 == 0,
                perceived.opinion.climate.W3 :=
-                 dat[canpref3 == 0, hv119 - hv120]]
+                 dat[canpref3 == 0, 2*hv119 - 100]]
   cleaned.data[, perceived.opinion.climate.W2 :=
                  scales::rescale(perceived.opinion.climate.W2,
                                   to = c(0, 100), from = c(-100, 100))]
@@ -368,6 +408,14 @@ setDT(cleaned.data)
     dat[, .SD, .SDcols = c("pv170", "pv171", "pv172", "pv173",
                            "pv174", "pv175", "pv176")])]
 
+  ## Need for social approval (related to social desirability)
+  dat[, kv148:kv150][, psych::alpha(as.data.frame(.SD), check.keys = T)]
+  cleaned.data[, need.for.approval.W2 := rowMeans(
+    dat[, .SD, .SDcols = c("kv148", "kv149", "kv150")])]
+  dat[, hv203:hv205][, psych::alpha(as.data.frame(.SD), check.keys = T)]
+  cleaned.data[, need.for.approval.W3 := rowMeans(
+    dat[, .SD, .SDcols = c("hv203", "hv204", "hv205")])]
+
 
 ## more recent exposure? using three most recent days
 
@@ -444,13 +492,11 @@ setDT(cleaned.data)
 
   ## create differences between perception and behavioral measures
   ## (+) values indicate the overestimation, and (-) means underestimation
-  cleaned.data[, dangerous.disc.W1.prop := dangerous.disc.W1*100]
-  cleaned.data[, diff.exp.disagree.W2 :=
-                 dangerous.disc.prcptn.W2 - dangerous.disc.W1.prop]
+  cleaned.data[, dis.accuracy.W2 :=
+                 dangerous.disc.prcptn.W2 - dangerous.disc.W1]
   # cleaned.data[, summary(diff.exp.disagree.W2)]
-  cleaned.data[, dangerous.disc.W2.prop := dangerous.disc.W2*100]
-  cleaned.data[, diff.exp.disagree.W3 :=
-                 dangerous.disc.prcptn.W3 - dangerous.disc.W2.prop]
+  cleaned.data[, dis.accuracy.W3 :=
+                 dangerous.disc.prcptn.W3 - dangerous.disc.W2]
   # cleaned.data[, summary(diff.exp.disagree.W3)]
 
   ## ------------------------------- ##
@@ -460,31 +506,29 @@ setDT(cleaned.data)
   cleaned.data[, log.total.exp.W1 := log(total.exp.W1 + 1)]
   cleaned.data[, log.total.exp.W2 := log(total.exp.W2 + 1)]
 
-  cleaned.data[, dis.accuracy.W2 :=
-                 (dangerous.disc.prcptn.W2 - dangerous.disc.W1.prop)/10]
-  cleaned.data[, agr.accuracy.W2 :=
-                 ((safe.disc.prcptn.W2 - (1 - dangerous.disc.W1)*100))/10]
-  cleaned.data[, dis.accuracy.cat.W2 :=
+  cleaned.data[, dis.accuracy.cat.W2 := ## ~ 10% = accurate
                  car::recode(dis.accuracy.W2,
-                             "0.1:hi = 'over'; else = 'accurate'",
+                             "lo:0 = 'accurate'; else = 'over'",
                              as.factor = T)]
-  cleaned.data[, agr.accuracy.cat.W2 :=
-                 car::recode(agr.accuracy.W2,
-                             "0.1:hi = 'over'; else = 'accurate'",
-                             as.factor = T)]
-
-  cleaned.data[, dis.accuracy.W3 :=
-                 (dangerous.disc.prcptn.W3 - dangerous.disc.W2.prop)/10]
-  cleaned.data[, agr.accuracy.W3 :=
-                 ((safe.disc.prcptn.W3 - (1 - dangerous.disc.W2)*100))/10]
   cleaned.data[, dis.accuracy.cat.W3 :=
                  car::recode(dis.accuracy.W3,
-                             "0.1:hi = 'over'; else = 'accurate'",
-                             as.factor = T)]
-  cleaned.data[, agr.accuracy.cat.W3 :=
-                 car::recode(agr.accuracy.W3,
-                             "0.1:hi = 'over'; else = 'accurate'",
+                             "lo:0 = 'accurate'; else = 'over'",
                              as.factor = T)]
 
-  # cleaned.data$canpref.W2 <- factor(cleaned.data$canpref.W2)
-  # cleaned.data$canpref.W3 <- factor(cleaned.data$canpref.W3)
+  # ## public opinion perception accuracy
+  # ## actual distribution
+  # cleaned.data[, diff(table(canpref.W2)/.N)*100]
+  # ## accuracy (perceived minus actual)
+  # ## (+) = overestimation of in-party supporters
+  # ## (-) = underestimation of inparty supporters
+  # cleaned.data[, op.accuracy.W2 := (perceived.opinion.climate.W2 - 36.07038)/100]
+  #
+
+
+  # recent accuracy
+  cleaned.data[, log.recent.total.exp.W1 := log(recent.total.exp.W1 + 1)]
+  cleaned.data[, log.recent.total.exp.W2 := log(recent.total.exp.W2 + 1)]
+  cleaned.data[, recent.accuracy.W2 :=
+                 dangerous.disc.prcptn.W2 - recent.dangerous.disc.W1]
+  cleaned.data[, recent.accuracy.W3 :=
+                 dangerous.disc.prcptn.W3 - recent.dangerous.disc.W2]

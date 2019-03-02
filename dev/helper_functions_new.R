@@ -220,6 +220,26 @@ get.boot.stats <- function(boot.out, type = "bca", ...) {
 #   JN
 # }
 
+# ## getting online tally by employing moving difference
+# online.tally <- function(x) {
+#
+#   ## find first nonzero value in series
+#   prior <- x[x > 0][1]
+#   if (is.na(prior)) {
+#     final.tally <- 0
+#   } else {
+#   ## retrieve location
+#   index <- which(x %in% prior)[1]
+#   ## form prior-relative exposure tally
+#   tally <- x - prior
+#   tally <- tally[-c(1:index)]
+#   ## sum tally only after date of first prior
+#     online.tally <- sum(tally, na.rm = T)
+#     final.tally <- prior + online.tally
+#   }
+#   return(final.tally)
+# }
+
 ## 'not in' function
 `%!in%` <- function (x, table) is.na(match(x, table, nomatch=NA_integer_))
 
@@ -243,7 +263,10 @@ select.modval <- function(dat, modx) {
 descriptives <- function(var) {
   m <- mean(var, na.rm = T)
   sd <- sd(var, na.rm = T)
-  return(c(M = m, SD = sd))
+  range <- range(var, na.rm = T)
+  des <- c(m, sd, range)
+  names(des) <- c("M", "SD", "range.low", "range.high")
+  return(des)
 }
 
 
