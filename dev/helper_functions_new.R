@@ -410,8 +410,8 @@ sim.MC <- function(sample_n, target.corr) {
   ## Manipulate correlation of subjective vs. objective measure,
   ## derive modified covariance matrix
   cor.mat <- cor.obs
-  cor.mat["dangerous.disc.prcptn.W3.r", "dangerous.disc.W2"] <- target.corr
-  cor.mat["dangerous.disc.W2", "dangerous.disc.prcptn.W3.r"] <- target.corr
+  cor.mat["dangerous.disc.prcptn.W3", "dangerous.disc.W2"] <- target.corr
+  cor.mat["dangerous.disc.W2", "dangerous.disc.prcptn.W3"] <- target.corr
   cov.mat <- psych::cor2cov(cor.mat, sds)
 
   if (sample_n == 341) {
@@ -443,10 +443,10 @@ sim.MC <- function(sample_n, target.corr) {
                              data = simulated.data) ## DV = certainty
 
     ## grap standarzied coefficietns and their significance
-    coef.sbj <- coef(summary(model.sbj.resample))['dangerous.disc.prcptn.W3.r', 1]
+    coef.sbj <- coef(summary(model.sbj.resample))['dangerous.disc.prcptn.W3', 1]
     coef.obj <- coef(summary(model.obj.resample))['dangerous.disc.W2', 1]
 
-    sig.sbj <- coef(summary(model.sbj.resample))['dangerous.disc.prcptn.W3.r', 4] < alpha
+    sig.sbj <- coef(summary(model.sbj.resample))['dangerous.disc.prcptn.W3', 4] < alpha
     sig.obj <- coef(summary(model.obj.resample))['dangerous.disc.W2', 4] < alpha
 
     est <- c(sample_n,

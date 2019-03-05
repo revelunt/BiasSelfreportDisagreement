@@ -734,7 +734,7 @@ var.names <- unique(c(names(coef(model.certainty.1)),
                       names(coef(model.certainty.2)))) %>% .[-1]
 mu <- cleaned.data[index, apply(.SD, 2, mean), .SDcols = var.names]
 sds <- cleaned.data[index, apply(.SD, 2, sd), .SDcols = var.names]
-focal.vars <- c("dangerous.disc.W2", "dangerous.disc.prcptn.W3.r")
+focal.vars <- c("dangerous.disc.W2", "dangerous.disc.prcptn.W3")
 cor.obs <- cleaned.data[index, cor(.SD), .SDcols = var.names]
 
 # source("power_cal.R")
