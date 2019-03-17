@@ -74,41 +74,63 @@ timevis(data = data.frame(
 ## Descriptive / Measures  ##
 ## ----------------------- ##
 
-## 0 = Park, 1 = Moon, 2 = else
+## sample demographics
 dat[, sapply(.SD, descriptives),
-      .SDcols = c("age", "sex", "edu", "income", "canpref1.imputed")]
+      .SDcols = c("age", "sex", "edu", "income")]
 
-#                  age       sex      edu   income canpref1.imputed
-# M          35.718475 1.4809384 7.683284 4.991202        0.6744868
-# SD          9.858853 0.5003707 1.040072 1.882562        0.5606405
-# range.low  16.000000 1.0000000 2.000000 1.000000        0.0000000
-# range.high 59.000000 2.0000000 9.000000 8.000000        2.0000000
+## "sex" is coded as 1 vs. 2, but the paper reports 0 vs. 1 scale
 
-cleaned.data[, sapply(.SD, descriptives),
-             .SDcols = c("female", "canpref.W1")]
-#               female canpref.W1
-# M          0.4809384  0.6744868
-# SD         0.5003707  0.5606405
-# range.low  0.0000000  0.0000000
-# range.high 1.0000000  2.0000000
+#                  age       sex      edu   income
+# M          35.718475 1.4809384 7.683284 4.991202
+# SD          9.858853 0.5003707 1.040072 1.882562
+# range.low  16.000000 1.0000000 2.000000 1.000000
+# range.high 59.000000 2.0000000 9.000000 8.000000
 
+## candidate support W1 and W2
+## 0 = Park, 1 = Moon, 2 = else
+cleaned.data[, table(canpref.W1)/.N]
+cleaned.data[, table(canpref.W2)/.N]
+
+
+## cumulutive proportion benchmark
 cleaned.data[, sapply(.SD, descriptives),
              .SDcols = c("dangerous.disc.W1",
-                         "dangerous.disc.W2",
-                         "dangerous.disc.online.tally.W1",
-                         "dangerous.disc.online.tally.W2",
-                         "dangerous.disc.prcptn.W2",
+                         "dangerous.disc.W2")]
+
+## average of daily proportions
+cleaned.data[, sapply(.SD, descriptives),
+             .SDcols = c("dangerous.disc.dlyavg.W1",
+                         "dangerous.disc.dlyavg.W2")]
+
+## perceived exposure to disagreement
+cleaned.data[, sapply(.SD, descriptives),
+             .SDcols = c("dangerous.disc.prcptn.W2",
                          "dangerous.disc.prcptn.W3")]
+
+## social desirability
+cleaned.data[, sapply(.SD, descriptives),
+             .SDcols = c("discussion.norm.W2",
+                         "discussion.norm.W3",
+                         "need.for.approval.W2",
+                         "need.for.approval.W3")]
+
+## motivation and ability (interest and knowledge)
+cleaned.data[, sapply(.SD, descriptives),
+             .SDcols = c("pol.interest.W2",
+                         "pol.interest.W3",
+                         "pol.know")]
+
+## opinion climates
+cleaned.data[, sapply(.SD, descriptives),
+             .SDcols = c("perceived.opinion.climate.W2",
+                         "perceived.opinion.climate.W3")]
 
 ## other variables in the model, for regression/mediation model
 cleaned.data[, sapply(.SD, descriptives),
-             .SDcols = c("perceived.opinion.climate.W2",
-                         "perceived.opinion.climate.W3",
-                         "ideo.W2",
+             .SDcols = c("ideo_str.W2", "ideo_str.W3",
+                         "canpref.W2", "canpref.W3",
                          "media.exposure.W2",
-                         "pol.interest.W2",
-                         "discussion.norm.W2",
-                         "log.netsize.W1", "log.netsize.W2")]
+                         "log.total.exp.W1", "log.total.exp.W2")]
 
 
 ## ----------------------- ##
@@ -303,6 +325,8 @@ diff.perm.test(cleaned.data, rep = 20000,
 # model2.luc <- sem(model2.luc.fm, data = cleaned.data, fixed.x = FALSE)
 # summary(model2.luc, fit.measures = TRUE) #standardized = TRUE)
 
+cleaned.data[, descriptives(dis.accuracy.W2)]
+cleaned.data[, descriptives(dis.accuracy.W3)]
 
 model1 <- lm(dis.accuracy.W2 ~ ## predicting overestimation
                ## social desirability
@@ -342,6 +366,39 @@ model2.cat <- glm(update.formula(model2, dis.accuracy.cat.W3 ~ .),
                   binomial("logit"),
                        data = cleaned.data)
 
+
+## predicting perception of exposure
+## controlling actual exposure
+
+model3.ols <- lm(dangerous.disc.prcptn.W2 ~
+                   dangerous.disc.W1 +
+                   discussion.norm.W2 +
+                   need.for.approval.W2 + ## cf. interaction is not sig as well
+                   ## partisan motivations
+                   perceived.opinion.climate.W2 +
+                   canpref.W2 + ideo_str.W2 +
+                   ## other controls
+                   log.total.exp.W1 + pol.interest.W2 + pol.know +
+                   ## demographic controls
+                   age.years + female + edu + household.income +
+                   ## media exposure
+                   media.exposure.W2, data = cleaned.data)
+
+
+model4.ols <- lm(dangerous.disc.prcptn.W3 ~
+                   dangerous.disc.W2 +
+                   discussion.norm.W3 +
+                   need.for.approval.W3 + ## cf. interaction is not sig as well
+                   perceived.opinion.climate.W3 +
+                   canpref.W3 + ideo_str.W3 +
+                   ## other controls
+                   log.total.exp.W2 + pol.interest.W3 + pol.know +
+                   ## demographic controls
+                   age.years + female + edu + household.income +
+                   ## media exposure
+                   media.exposure.W2,
+                 data = cleaned.data)
+
 # model1.luc.out <- model1.luc
 # model1.luc <- extract.lm(model1)
 # model1.luc@coef.names <- model1.luc@coef.names[-1]
@@ -368,7 +425,35 @@ model2.cat <- glm(update.formula(model2, dis.accuracy.cat.W3 ~ .),
 # model2.luc@gof <- fitMeasures(model2.luc.out)[
 #   c("cfi", "tli", "rmsea", "rmsea.pvalue", "srmr")]
 
+
+require(boot)
+boot.model1 <- boot(cleaned.data, statistic = boot.lm,
+                    R = 10000, parallel = "multicore", ncpus = 8,
+                    lm.fit = model1) %>% get.boot.stats(., type = "perc")
+
+boot.model1.cat <- boot(cleaned.data, statistic = boot.glm,
+                        R = 10000, parallel = "multicore", ncpus = 8,
+                        glm.fit = model1.cat) %>% get.boot.stats(., type = "perc")
+
+boot.model2 <- boot(cleaned.data, statistic = boot.lm,
+                    R = 10000, parallel = "multicore", ncpus = 8,
+                    lm.fit = model2) %>% get.boot.stats(., type = "perc")
+
+boot.model2.cat <- boot(cleaned.data, statistic = boot.glm,
+                        R = 10000, parallel = "multicore", ncpus = 8,
+                        glm.fit = model2.cat) %>% get.boot.stats(., type = "perc")
+
+boot.model3 <- boot(cleaned.data, statistic = boot.lm,
+                        R = 10000, parallel = "multicore", ncpus = 8,
+                    lm.fit = model3.ols) %>% get.boot.stats(., type = "perc")
+
+boot.model4 <- boot(cleaned.data, statistic = boot.lm,
+                    R = 10000, parallel = "multicore", ncpus = 8,
+                    lm.fit = model4.ols) %>% get.boot.stats(., type = "perc")
+
 require(texreg)
+
+## Table 2 in the main ms and A1 in the appendix
 screenreg(list(model1, model1.cat, #model1.luc,
                model2, model2.cat), #model2.luc),
           stars = c(0.001, 0.01, 0.05, 0.10), digits = 3,
@@ -384,12 +469,90 @@ screenreg(list(model1, model1.cat, #model1.luc,
             "Need for socl approval W2/W3", "Prcvd Op Climate W2/W3",
             "Candidate pref W2/W3", "Ideo Strength W2/W3",
             "Total Exp W1/W2 (log)", "Interest W2/W3"),
+          override.ci.low = list(boot.model1[,2], boot.model1.cat[,2],
+                                 boot.model2[,2], boot.model2.cat[,2]),
+          override.ci.up = list(boot.model1[,3], boot.model1.cat[,3],
+                                boot.model2[,3], boot.model2.cat[,3]),
           reorder.coef = c(2:3, 8:9, 4:6, 7,14, 10:13, 1),
           groups = list("Social desirability" = 1:2,
                         "Cognitive burden" = 3:4,
                         "Opinion Climate" = 5,
                         "Controls" = 6:9,
                         "Demographics" = 10:13))
+
+## Table A2 in the appendix, predicting perceived exposure to disagreement
+screenreg(list(model3.ols, model4.ols),
+          stars = c(0.001, 0.01, 0.05, 0.10), digits = 3,
+          single.row = T, leading.zero = F,
+          custom.model.names = c("Prcv Dis W2", "Prcv Dis W3"),
+          override.ci.low = list(boot.model3[,2], boot.model4[,2]),
+          override.ci.up = list(boot.model3[,3], boot.model4[,3]),
+          custom.coef.names = c(
+          "(Intercept)", "Actual Exp to Dis % W1/W2", "Discussion norm W2/W3",
+          "Need for socl approval W2/W3", "Prcvd Op Climate W2/W3",
+          "Candidate pref W2/W3", "Ideo Strength W2/W3",
+          "Total Exp W1/W2 (log)", "Interest W2/W3", "Knowledge",
+          "Age (in years)", "Female", "Education", "HH income",
+          "Media Exposure",  "Actual Exp to Dis % W1/W2", "Discussion norm W2/W3",
+          "Need for socl approval W2/W3", "Prcvd Op Climate W2/W3",
+          "Candidate pref W2/W3", "Ideo Strength W2/W3",
+          "Total Exp W1/W2 (log)", "Interest W2/W3"),
+          reorder.coef = c(2:4, 9:10, 5:7, 8,15, 11:14, 1),
+          groups = list("Actual Exposure" = 1,
+                        "Social desirability" = 2:3,
+                        "Cognitive burden" = 4:5,
+                        "Opinion Climate" = 6,
+                        "Controls" = 7:10,
+                        "Demographics" = 11:14))
+
+
+
+
+
+# plotreg(list(model1, model2),
+#         custom.model.names = c("Inaccuracy, W1 log vs. W2 perception",
+#                                "Inaccuracy, W2 log vs. W3 perception"),
+#         custom.coef.names = list(
+#           c("(Intercept)", "Discussion norm W2",
+#             "Need for approval W2", "Prcvd Op Climate W2",
+#             "Candidate pref W2", "Ideo Strength W2",
+#             "Total Exp W1 (log)", "Interest W2", "Knowledge",
+#             "Age (in years)", "Female", "Education", "HH income",
+#             "Media Exposure"),
+#           ## Wave 2 model
+#           c("(Intercept)", "Discussion norm W3", "Need for approval W3",
+#             "Prcvd Op Climate W3", "Candidate pref W3", "Ideo Strength W3",
+#             "Total Exp W2 (log)", "Interest W3", "Knowledge",
+#             "Age (in years)", "Female", "Education", "HH income",
+#             "Media Exposure")),
+#         omit.coef = c("(Intercept)|(Candidate)"),
+#         mfrow = T, lwd.inner = 5, custom.note = "Note: Bars denote 95% CIs",
+#         lwd.zerobar = 2,
+#         insignif.dark = "gray",
+#         insignif.light = "gray80",
+#         insignif.medium = "gray")
+
+## standardized effects using jtools::plot_summs
+require(jtools)
+p_coef <- plot_summs(model1, model2, scale = TRUE, n.sd = 2,
+           colors = "Qual2",
+           model.names = c("W1 log-data vs. W2 perception",
+                           "W2 log-data vs. W3 perception"),
+           legend.title = "DV: Inaccuracy",
+           coefs = c("Discussion norm" = "discussion.norm.W2",
+                     "Discussion norm" = "discussion.norm.W3",
+                     "Need for approval" = "need.for.approval.W2",
+                     "Need for approval" = "need.for.approval.W3",
+                     "Prcvd Op Climate" = "perceived.opinion.climate.W2",
+                     "Prcvd Op Climate" = "perceived.opinion.climate.W3",
+                     "Political Interest" = "pol.interest.W2",
+                     "Political Interest" = "pol.interest.W3",
+                     "Political Knowledge" = "pol.know"))
+
+p_coef + xlab("Standardized effects (2SD difference)") + ylab("") + theme_bw() +
+  theme(legend.position = "bottom")
+
+
 
 ## cf. Pseudo-Rsq
 require(rcompanion)
@@ -515,8 +678,17 @@ model2r <- lm(update.formula(model2,
                + log.recent.total.exp.W2 - log.total.exp.W2),
               data = cleaned.data)
 
+boot.model1r <- boot(cleaned.data, statistic = boot.lm,
+                    R = 10000, parallel = "multicore", ncpus = 8,
+                    lm.fit = model1r) %>% get.boot.stats(., type = "perc")
+
+boot.model2r <- boot(cleaned.data, statistic = boot.lm,
+                    R = 10000, parallel = "multicore", ncpus = 8,
+                    lm.fit = model2r) %>% get.boot.stats(., type = "perc")
+
+
 require(texreg)
-screenreg(list(model1, model1r,model2, model2r),
+screenreg(list(model1, model1r, model2, model2r),
           stars = c(0.001, 0.01, 0.05, 0.10), digits = 3,
           custom.model.names = c("OLS W2", "OLS W2 RECENT",
                                  "OLS W3", "OLS W3 RECENT"),
@@ -531,6 +703,10 @@ screenreg(list(model1, model1r,model2, model2r),
             "Prcvd Op Climate W2/W3", "Candidate pref W2/W3",
             "Ideo Strength W2/W3", "Total Exp W1/W2 (log)",
             "Interest W2/W3", "Total Exp W1/W2 (log)"),
+          override.ci.low = list(boot.model1[,2], boot.model1r[,2],
+                                 boot.model2[,2], boot.model2r[,2]),
+          override.ci.up = list(boot.model1[,3], boot.model1r[,3],
+                                boot.model2[,3], boot.model2r[,3]),
           reorder.coef = c(2:3, 8:9, 4:6, 7,14, 10:13, 1),
           groups = list("Social desirability" = 1:2,
                         "Cognitive burden" = 3:4,
@@ -722,6 +898,31 @@ coef.sbj <- coef(summary(model.certainty.1))['dangerous.disc.prcptn.W3', 1]
 coef.obj <- coef(summary(model.certainty.2))['dangerous.disc.W2', 1]
 relative.size.sbj.obs <- coef.sbj/coef.obj
 bias.obs <- abs(coef.sbj - coef.obj)
+
+p2_coef <- plot_summs(model.certainty.1, model.certainty.2,
+                      #scale = TRUE, n.sd = 2,
+                     colors = "Qual2",
+                     model.names = c("Model w/ sbj measure",
+                                     "Model w/ obj measure"),
+                     legend.title = "DV: Pref certainty W3",
+                     coefs = c("Pref Certainty W2" = "pref.certainty.W2",
+                               "Exp to Disagree" = "dangerous.disc.prcptn.W3",
+                               "Exp to Disagree" = "dangerous.disc.W2",
+                               "Total Exp W2 (log)" = "log.total.exp.W2",
+                               "Media Exposure" = "media.exposure.W2",
+                               "Candidate pref W2" = "canpref.W2",
+                               "Ideo Strength W2" = "ideo_str.W2",
+                               "Political interest"= "pol.interest.W2",
+                               "Political Knowledge" = "pol.know",
+                               "Political Efficacy" = "internal.efficacy.W3",
+                               "Age (in years)" = "age.years",
+                               "Female" = "female",
+                               "Education" = "edu",
+                               "HH income" = "household.income"))
+
+p2_coef + xlab("Unstandardized regression coef.") + ylab("") + theme_bw() +
+  theme(legend.position = "bottom")
+
 
 ## For simulation inference
 require(MASS)

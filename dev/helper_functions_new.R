@@ -133,6 +133,17 @@ std.lm <- function(lm.model) {
   sjstats::std_beta(lm.model,  type = "std2")
 }
 
+boot.lm <- function(lm.fit, dat, i) {
+  resample <- dat[i,]
+  refit <- lm(formula(lm.fit), data = resample)
+  coef(refit)
+}
+
+boot.glm <- function(glm.fit, dat, i) {
+  resample <- dat[i,]
+  refit <- glm(formula(glm.fit), family = binomial("logit"), data = resample)
+  coef(refit)
+}
 
 
 require(formula.tools)

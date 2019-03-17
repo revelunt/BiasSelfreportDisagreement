@@ -102,7 +102,10 @@ cleaned.data <- net[, .(reading.date,
                                    dat[net[, poster.id], canpref2])
                 )][reading.date %in% date.range[5:18],
                     .(dangerous.disc.W1 = mean(exp.disagree, na.rm = T),
-                      total.exp.W1 = sum(count)), by = id] %>% setkey(., "id")
+                      total.exp.W1 = sum(count),
+                      total.dangerous.disc.W1 = sum(exp.disagree),
+                      total.safe.disc.W1 = sum(count) - sum(exp.disagree)),
+                   by = id] %>% setkey(., "id")
 
 cleaned.data <- merge(cleaned.data,
                       net[, .(reading.date,
@@ -113,8 +116,10 @@ cleaned.data <- merge(cleaned.data,
                                   dat[net[, poster.id], canpref3])
                       )][reading.date %in% date.range[15:27],
                          .(dangerous.disc.W2 = mean(exp.disagree, na.rm = T),
-                           total.exp.W2 = sum(count)), by = id],
-                      by = "id", all = TRUE)
+                           total.exp.W2 = sum(count),
+                           total.dangerous.disc.W2 = sum(exp.disagree),
+                           total.safe.disc.W2 = sum(count) - sum(exp.disagree)),
+                         by = id], by = "id", all = TRUE)
 
 ## ------------------------------------------------------------------------ ##
 ## calculate the amount of exposure to diagreement -- mean of daily average ##
@@ -124,6 +129,7 @@ cleaned.data <- merge(cleaned.data,
 ## OLD MEASURE ##
 ## ----------- ##
 
+## disagreement W1
 cleaned.data <- merge(cleaned.data,
                       net[, .(reading.date, id = reader.id,
                               exp.disagree = !(
@@ -140,7 +146,24 @@ cleaned.data <- merge(cleaned.data,
                                 sum(dangerous.disc.dlyavg.W1)/14), by = id],
                       by = "id", all = TRUE)
 
+## agreement W1
+cleaned.data <- merge(cleaned.data,
+                      net[, .(reading.date, id = reader.id,
+                              exp.agree = (
+                                dat[net[, reader.id], canpref2] ==
+                                  dat[net[, poster.id], canpref2])
+                      )] %>%
+                        .[reading.date %in% date.range[5:18],
+                          .(safe.disc.dlyavg.W1 =
+                              mean(exp.agree, na.rm = T)),
+                          by = c("id", "reading.date")] %>%
+                        .[, .(safe.disc.dlyavg.W1 =
+                                ## daily average means we need to divide by no. of days
+                                ## but not by just simple mean....
+                                sum(safe.disc.dlyavg.W1)/14), by = id],
+                      by = "id", all = TRUE)
 
+# disagreement W2
 cleaned.data <- merge(cleaned.data,
                       net[, .(reading.date, id = reader.id,
                               exp.disagree = !(
@@ -153,6 +176,21 @@ cleaned.data <- merge(cleaned.data,
                           by = c("id", "reading.date")] %>%
                         .[, .(dangerous.disc.dlyavg.W2 =
                                 sum(dangerous.disc.dlyavg.W2)/13), by = id],
+                      by = "id", all = TRUE)
+
+# agreement W2
+cleaned.data <- merge(cleaned.data,
+                      net[, .(reading.date, id = reader.id,
+                              exp.agree = (
+                                dat[net[, reader.id], canpref3] ==
+                                  dat[net[, poster.id], canpref3])
+                      )] %>%
+                        .[reading.date %in% date.range[15:27],
+                          .(safe.disc.dlyavg.W2 =
+                              mean(exp.agree, na.rm = T)),
+                          by = c("id", "reading.date")] %>%
+                        .[, .(safe.disc.dlyavg.W2 =
+                                sum(safe.disc.dlyavg.W2)/13), by = id],
                       by = "id", all = TRUE)
 
 ## Time-of-exposure tally compared to daily, forming prior-exposure-relative score
@@ -289,24 +327,37 @@ setDT(cleaned.data)
   ## their in-party supporters vis-a-vis out-party supporters
   ## (excluding third-party candidates)
   ## (+) values means more perceived prevalence of in-party supporters
-  cleaned.data[canpref.W2 == 1, ## liberal canddiate
-               perceived.opinion.climate.W2 :=
-                 dat[canpref2 == 1, 2*kv65 - 100]] ## liberal minus conservative
-  cleaned.data[canpref.W2 == 0,
-               perceived.opinion.climate.W2 :=
-                 dat[canpref2 == 0, 2*kv64 - 100]]
-  cleaned.data[canpref.W3 == 1,
-               perceived.opinion.climate.W3 :=
-                 dat[canpref3 == 1, 2*hv120 - 100]]
-  cleaned.data[canpref.W3 == 0,
-               perceived.opinion.climate.W3 :=
-                 dat[canpref3 == 0, 2*hv119 - 100]]
-  cleaned.data[, perceived.opinion.climate.W2 :=
-                 scales::rescale(perceived.opinion.climate.W2,
-                                  to = c(0, 100), from = c(-100, 100))]
-  cleaned.data[, perceived.opinion.climate.W3 :=
-                 scales::rescale(perceived.opinion.climate.W3,
-                                   to = c(0, 100), from = c(-100, 100))]
+  # cleaned.data[canpref.W2 == 1, ## liberal canddiate
+  #              perceived.opinion.climate.W2 :=
+  #                dat[canpref2 == 1, 2*kv65 - 100]] ## liberal minus conservative
+  # cleaned.data[canpref.W2 == 0,
+  #              perceived.opinion.climate.W2 :=
+  #                dat[canpref2 == 0, 2*kv64 - 100]]
+  # cleaned.data[canpref.W3 == 1,
+  #              perceived.opinion.climate.W3 :=
+  #                dat[canpref3 == 1, 2*hv120 - 100]]
+  # cleaned.data[canpref.W3 == 0,
+  #              perceived.opinion.climate.W3 :=
+  #                dat[canpref3 == 0, 2*hv119 - 100]]
+  # cleaned.data[, perceived.opinion.climate.W2 :=
+  #                scales::rescale(perceived.opinion.climate.W2,
+  #                                 to = c(0, 100), from = c(-100, 100))]
+  # cleaned.data[, perceived.opinion.climate.W3 :=
+  #                scales::rescale(perceived.opinion.climate.W3,
+  #                                  to = c(0, 100), from = c(-100, 100))]
+  #
+
+  ## new contstruction:
+  ## overall ideology minus oneself, therefore discrepancy, from 0 to 6
+  ## THIS DOES NOT WORK WELL!
+  # cleaned.data[, perceived.opinion.climate.W2 := dat[, 6 - abs(kv50 - kv49)]]
+  # cleaned.data[, perceived.opinion.climate.W3 := dat[, 6 - abs(hv105 - hv104)]]
+
+  cleaned.data[, perceived.opinion.climate.W2 := dat[, kv85]]
+  cleaned.data[, perceived.opinion.climate.W3 := dat[, hv140]]
+
+
+
 
   ## discussion motivations (invariant across waves)
     ## consistency motivation
@@ -505,6 +556,8 @@ setDT(cleaned.data)
 
   cleaned.data[, log.total.exp.W1 := log(total.exp.W1 + 1)]
   cleaned.data[, log.total.exp.W2 := log(total.exp.W2 + 1)]
+  cleaned.data[, log.total.dangerous.disc.W1 := log(total.dangerous.disc.W1 + 1)]
+  cleaned.data[, log.total.safe.disc.W1 := log(total.safe.disc.W1 + 1)]
 
   cleaned.data[, dis.accuracy.cat.W2 := ## ~ 10% = accurate
                  car::recode(dis.accuracy.W2,
