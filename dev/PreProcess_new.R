@@ -322,30 +322,30 @@ setDT(cleaned.data)
   cleaned.data[, ideo_str.W3 := abs(dat$hv104 - 4)]
 
 
-  ## perceived opinion climate based on candidate preference
-  ## defined as perceived prevalence of
-  ## their in-party supporters vis-a-vis out-party supporters
-  ## (excluding third-party candidates)
-  ## (+) values means more perceived prevalence of in-party supporters
-  # cleaned.data[canpref.W2 == 1, ## liberal canddiate
-  #              perceived.opinion.climate.W2 :=
-  #                dat[canpref2 == 1, 2*kv65 - 100]] ## liberal minus conservative
-  # cleaned.data[canpref.W2 == 0,
-  #              perceived.opinion.climate.W2 :=
-  #                dat[canpref2 == 0, 2*kv64 - 100]]
-  # cleaned.data[canpref.W3 == 1,
-  #              perceived.opinion.climate.W3 :=
-  #                dat[canpref3 == 1, 2*hv120 - 100]]
-  # cleaned.data[canpref.W3 == 0,
-  #              perceived.opinion.climate.W3 :=
-  #                dat[canpref3 == 0, 2*hv119 - 100]]
-  # cleaned.data[, perceived.opinion.climate.W2 :=
-  #                scales::rescale(perceived.opinion.climate.W2,
-  #                                 to = c(0, 100), from = c(-100, 100))]
-  # cleaned.data[, perceived.opinion.climate.W3 :=
-  #                scales::rescale(perceived.opinion.climate.W3,
-  #                                  to = c(0, 100), from = c(-100, 100))]
-  #
+  # perceived opinion climate based on candidate preference
+  # defined as perceived prevalence of
+  # their in-party supporters vis-a-vis out-party supporters
+  # (excluding third-party candidates)
+  # (+) values means more perceived prevalence of in-party supporters
+  cleaned.data[canpref.W2 == 1, ## liberal canddiate
+               alt.perceived.opinion.climate.W2 :=
+                 dat[canpref2 == 1, 2*kv65 - 100]] ## liberal minus conservative
+  cleaned.data[canpref.W2 == 0,
+               alt.perceived.opinion.climate.W2 :=
+                 dat[canpref2 == 0, 2*kv64 - 100]]
+  cleaned.data[canpref.W3 == 1,
+               alt.perceived.opinion.climate.W3 :=
+                 dat[canpref3 == 1, 2*hv120 - 100]]
+  cleaned.data[canpref.W3 == 0,
+               alt.perceived.opinion.climate.W3 :=
+                 dat[canpref3 == 0, 2*hv119 - 100]]
+  cleaned.data[, alt.perceived.opinion.climate.W2 :=
+                 scales::rescale(alt.perceived.opinion.climate.W2,
+                                  to = c(0, 100), from = c(-100, 100))]
+  cleaned.data[, perceived.opinion.climate.W3 :=
+                 scales::rescale(alt.perceived.opinion.climate.W3,
+                                   to = c(0, 100), from = c(-100, 100))]
+
 
   ## new contstruction:
   ## overall ideology minus oneself, therefore discrepancy, from 0 to 6

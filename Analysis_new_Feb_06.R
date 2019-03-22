@@ -194,8 +194,6 @@ qq3.avg <- ggplot(qq.avg.out3, aes(x = x, y = y)) +
   ylab("W3 Perception \n(Prop. of Exposure to disagreement)") +
   ggtitle("W2 Exposure vs. W3 Perception")
 
-## Figure 1
-qq2 + qq3 + qq2.avg + qq3.avg + plot_layout(nrow = 2, ncol = 2)
 
 ## check the correlation of measures
 cleaned.data[, cor.test(dangerous.disc.W1, dangerous.disc.prcptn.W2)]
@@ -637,7 +635,8 @@ qq3r <- ggplot(qq.out3.r, aes(x = x, y = y)) +
   ylab("W3 Perception \n(Prop. of Exposure to diagreement)") +
   ggtitle("W2 Recent three-day Exposure vs. W3 Perception")
 
-qq2r + qq3r + plot_layout(nrow = 1)
+## Figure 1
+qq2 + qq3 + qq2.avg + qq3.avg + qq2r + qq3r + plot_layout(nrow = 3, ncol = 2)
 
 
 ## test of equality of two correlation coefficients
