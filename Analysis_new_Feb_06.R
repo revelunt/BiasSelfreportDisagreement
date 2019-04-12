@@ -231,97 +231,6 @@ diff.perm.test(cleaned.data, rep = 20000,
 ## indicates for detecting small effect given sample size
 ## alpha is 0.07, therefore we stick to alpha = 0.5
 
-## we can model the "latent" change score using univariate latent change score
-## similar to latent growth model
-## see https://www.tandfonline.com/doi/abs/10.1080/00049539208260150
-## we can model latent "discrepancy" factor
-## and subsequently regress on a set of exogenous variables
-#
-# require(lavaan)
-#
-# model1.luc.fm <- '
-#
-# ## baseline and descrepancy factor
-#     f_base =~ 1*dangerous.disc.W1 + 1*dangerous.disc.prcptn.W2
-#     f_diff =~ 1*dangerous.disc.prcptn.W2
-#
-# ## mean and variance of subjective/objective measures, all fixed to 0
-#    dangerous.disc.prcptn.W2 ~ 1*0
-#    dangerous.disc.prcptn.W2 ~~ 0*dangerous.disc.prcptn.W2
-#    dangerous.disc.W1 ~ 1*0
-#    dangerous.disc.W1 ~~ 0*dangerous.disc.W1
-# ## conditional intercept and variance of latent score
-#    f_diff ~ 1
-#    f_diff ~~ f_diff
-#    f_base ~ 1
-#    f_base ~~ f_base
-# ## covariance of latent scores
-#    f_base ~~ f_diff
-#
-# ## regress objective exposure on Xs
-#    ## baseline total exposure
-#       f_base ~ log.total.exp.W1
-#    ## demographics
-#       f_base ~ age.years + female + edu + household.income
-#    ## partisanships
-#       f_base ~ canpref.W2 + ideo_str.W2
-#    ## motivation and ability factor
-#       f_base ~  pol.interest.W2 + pol.know + media.exposure.W2
-#
-# ## regress descprepancy on Xs
-#       f_diff ~ discussion.norm.W2 + need.for.approval.W2 +
-#                perceived.opinion.climate.W2 +
-#                log.total.exp.W1 +
-#                age.years + female + edu + household.income +
-#                canpref.W2 + pol.interest.W2 + pol.know + ideo_str.W2 +
-#                media.exposure.W2
-# '
-#
-# model1.luc <- sem(model1.luc.fm, data = cleaned.data)
-# summary(model1.luc, fit.measures = TRUE)
-# # modificationindices(model1.luc, sort. = T)
-
-# model2.luc.fm <- '
-#
-# ## baseline and descrepancy factor
-#     f_base =~ 1*dangerous.disc.W2 + 1*dangerous.disc.prcptn.W3
-#     f_diff =~ 1*dangerous.disc.prcptn.W3
-#
-# ## mean and variance of subjective/objective measures, all fixed to 0
-#    dangerous.disc.prcptn.W3 ~ 1*0
-#    dangerous.disc.prcptn.W3 ~~ 0*dangerous.disc.prcptn.W3
-#    dangerous.disc.W2 ~ 1*0
-#    dangerous.disc.W2 ~~ 0*dangerous.disc.W2
-# ## conditional intercept and variance of latent score
-#    f_diff ~ 1
-#    f_diff ~~ f_diff
-#    f_base ~ 1
-#    f_base ~~ f_base
-# ## covariance of latent scores
-#    f_base ~~ f_diff
-#
-# ## regress objective exposure on Xs
-#    ## baseline total exposure
-#       f_base ~ log.total.exp.W2
-#    ## demographics
-#       f_base ~ age.years + female + edu + household.income
-#    ## partisanships
-#       f_base ~ canpref.W3 + ideo_str.W3
-#    ## motivation and ability factor
-#       f_base ~  pol.interest.W2 + pol.know + media.exposure.W2
-#
-# ## regress descprepancy on Xs
-#       f_diff ~ discussion.norm.W3 + need.for.approval.W3 +
-#                perceived.opinion.climate.W3 +
-#                log.total.exp.W2 +
-#                age.years + female + edu + household.income +
-#                canpref.W3 + pol.interest.W3 + pol.know + ideo_str.W3 +
-#                media.exposure.W2
-# '
-#
-#
-# model2.luc <- sem(model2.luc.fm, data = cleaned.data, fixed.x = FALSE)
-# summary(model2.luc, fit.measures = TRUE) #standardized = TRUE)
 
 cleaned.data[, descriptives(dis.accuracy.W2)]
 cleaned.data[, descriptives(dis.accuracy.W3)]
@@ -397,54 +306,40 @@ model4.ols <- lm(dangerous.disc.prcptn.W3 ~
                    media.exposure.W2,
                  data = cleaned.data)
 
-# model1.luc.out <- model1.luc
-# model1.luc <- extract.lm(model1)
-# model1.luc@coef.names <- model1.luc@coef.names[-1]
-#
-# test <- parameterEstimates(model1.luc.out) %>% setDT(.)
-# model1.luc@coef <- test[lhs == 'f_diff' & op == '~', est]
-# model1.luc@se <- test[lhs == 'f_diff' & op == '~', se]
-# model1.luc@pvalues <- test[lhs == 'f_diff' & op == '~', pvalue]
-# model1.luc@gof.names <- c("CFI", "TLI", "RMSEA", "P(RMSEA<.05)", "SRMR")
-# model1.luc@gof.decimal <- c(TRUE, TRUE, TRUE, TRUE, TRUE)
-# model1.luc@gof <- fitMeasures(model1.luc.out)[
-#                     c("cfi", "tli", "rmsea", "rmsea.pvalue", "srmr")]
-#
-# model2.luc.out <- model2.luc
-# model2.luc <- extract.lm(model2)
-# model2.luc@coef.names <- model2.luc@coef.names[-1]
-#
-# test <- parameterEstimates(model2.luc.out) %>% setDT(.)
-# model2.luc@coef <- test[lhs == 'f_diff' & op == '~', est]
-# model2.luc@se <- test[lhs == 'f_diff' & op == '~', se]
-# model2.luc@pvalues <- test[lhs == 'f_diff' & op == '~', pvalue]
-# model2.luc@gof.names <- c("CFI", "TLI", "RMSEA", "P(RMSEA<.05)", "SRMR")
-# model2.luc@gof.decimal <- c(TRUE, TRUE, TRUE, TRUE, TRUE)
-# model2.luc@gof <- fitMeasures(model2.luc.out)[
-#   c("cfi", "tli", "rmsea", "rmsea.pvalue", "srmr")]
-
 
 require(boot)
+RNGkind("L'Ecuyer-CMRG")
+set.seed(12345)
 boot.model1 <- boot(cleaned.data, statistic = boot.lm,
                     R = 10000, parallel = "multicore", ncpus = 8,
                     lm.fit = model1) %>% get.boot.stats(., type = "perc")
 
+RNGkind("L'Ecuyer-CMRG")
+set.seed(12345)
 boot.model1.cat <- boot(cleaned.data, statistic = boot.glm,
                         R = 10000, parallel = "multicore", ncpus = 8,
                         glm.fit = model1.cat) %>% get.boot.stats(., type = "perc")
 
+RNGkind("L'Ecuyer-CMRG")
+set.seed(12345)
 boot.model2 <- boot(cleaned.data, statistic = boot.lm,
                     R = 10000, parallel = "multicore", ncpus = 8,
                     lm.fit = model2) %>% get.boot.stats(., type = "perc")
 
+RNGkind("L'Ecuyer-CMRG")
+set.seed(12345)
 boot.model2.cat <- boot(cleaned.data, statistic = boot.glm,
                         R = 10000, parallel = "multicore", ncpus = 8,
                         glm.fit = model2.cat) %>% get.boot.stats(., type = "perc")
 
+RNGkind("L'Ecuyer-CMRG")
+set.seed(12345)
 boot.model3 <- boot(cleaned.data, statistic = boot.lm,
                         R = 10000, parallel = "multicore", ncpus = 8,
                     lm.fit = model3.ols) %>% get.boot.stats(., type = "perc")
 
+RNGkind("L'Ecuyer-CMRG")
+set.seed(12345)
 boot.model4 <- boot(cleaned.data, statistic = boot.lm,
                     R = 10000, parallel = "multicore", ncpus = 8,
                     lm.fit = model4.ols) %>% get.boot.stats(., type = "perc")
@@ -478,7 +373,7 @@ screenreg(list(model1, model1.cat, #model1.luc,
                         "Controls" = 6:9,
                         "Demographics" = 10:13))
 
-## Table A2 in the appendix, predicting perceived exposure to disagreement
+## Table A3 in the appendix, predicting perceived exposure to disagreement
 screenreg(list(model3.ols, model4.ols),
           stars = c(0.001, 0.01, 0.05, 0.10), digits = 3,
           single.row = T, leading.zero = F,
@@ -712,137 +607,6 @@ screenreg(list(model1, model1r, model2, model2r),
                         "Opinion Climate" = 5,
                         "Controls" = 6:9,
                         "Demographics" = 10:13))
-
-
-
-## ---------------------------------------- ##
-## Predicting perceived opinion climates    ##
-## (Moderated by one's political knowledge) ##
-## ---------------------------------------- ##
-#
-# ## model predicting perceived opinion climate
-# model.poc.1 <- lm(perceived.opinion.climate.W2 ~
-#                 ## focal predictor
-#                  dangerous.disc.W1*pol.know +
-#                  log.total.exp.W1 +
-#                  ## demographic controls
-#                  age.years + female + edu + household.income +
-#                  ## political correlates
-#                  canpref.W2 + pol.interest.W2 + pol.know + ideo_str.W2 +
-#                  ## media exposure
-#                  media.exposure.W2
-#               ,
-#               data = cleaned.data); # summary(model.poc.1)
-#
-# require(boot)
-# require(car)
-# require(interactions)
-#
-# model.poc.1.boot <- car::Boot(model.poc.1, f = coef, method = "case",
-#                               R = 10000, ncores = 8)
-# model.poc.1.boot <- get.boot.stats(model.poc.1.boot, type = "bca")
-#
-# p5 <- interactions::interact_plot(model = model.poc.1,
-#                       pred = "dangerous.disc.W1",
-#                       modx = "pol.know")
-# ## in W2, ideo str also moderates the exp to disagree,
-# ## yet this is not replicated in W3
-#
-# model.poc.2 <- lm(perceived.opinion.climate.W3 ~
-#                     ## focal predictor
-#                     dangerous.disc.W2*pol.know +
-#                     log.total.exp.W2 +
-#                     ## demographic controls
-#                     age.years + female + edu + household.income +
-#                     ## political correlates
-#                     canpref.W3 + pol.interest.W2 + pol.know + ideo_str.W3 +
-#                     ## media exposure
-#                     media.exposure.W2
-#                   ,
-#                   data = cleaned.data); summary(model.poc.2)
-#
-# model.poc.2.boot <- car::Boot(model.poc.2, f = coef, method = "case",
-#                               R = 10000, ncores = 8)
-# model.poc.2.boot <- get.boot.stats(model.poc.2.boot, type = "bca")
-#
-# p6 <- interactions::interact_plot(model = model.poc.2,
-#                       pred = "dangerous.disc.W2",
-#                       modx = "pol.know")
-#
-# p5 + p6 + plot_layout(nrow = 1)
-#
-# ## since DV distribution is not likely to be normal,
-# ## we use bootstrapping (bca interval) instead of regular OLS
-#
-# # DV = Perceived Opinion Climate
-# screenreg(list(model.poc.1, model.poc.2), single.row = T,
-#           custom.model.names = c("POC OLS W2", "POC OLS W3"),
-#           custom.coef.names = c(
-#             "(Intercept)", "Out-party Exp W1/W2", "Knowledge",
-#             "Total Exp W1/W2 (log)", "Age (in years)", "Female", "Education",
-#             "HH income", "Candidate pref W2/W3", "Interest",
-#             "Ideo Strength W2/W3", "Media Exposure", "Out Exp X Kn",
-#             "Out-party Exp W1/W2", "Total Exp W1/W2 (log)",
-#             "Candidate pref W2/W3", "Ideo Strength W2/W3", "Out Exp X Kn"),
-#           override.ci.low = list(model.poc.1.boot[, 'llci'],
-#                                  model.poc.2.boot[, 'llci']),
-#           override.ci.up = list(model.poc.1.boot[, 'ulci'],
-#                                 model.poc.2.boot[, 'ulci']),
-#           reorder.coef = c(2:3,13, 4,9:12, 5:8, 1),
-#           groups = list("Focal predictors" = 1:3,  "Controls" = 4:7,
-#                         "Demographics" = 8:11))
-
-## -------------------------------------------------------- ##
-## Nonparametric bootstrap-based indirect effect inferences ##
-## -------------------------------------------------------- ##
-
-## Conditional indirect effect
-## first, we need a new model predicting Y as not diff score, but
-## perception measure alone, controlling for disagreement
-
-# model.perc.1 <- lm(dangerous.disc.prcptn.W3 ~
-#                      ## focal X
-#                      dangerous.disc.W1 +
-#                      log.total.exp.W1 +
-#                      # Mediator
-#                      perceived.opinion.climate.W2 +
-#                      ## demographic controls
-#                      age.years + female + edu + household.income +
-#                      ## political correlates
-#                      canpref.W2 + pol.interest.W2 + pol.know + ideo_str.W2 +
-#                      ## media exposure
-#                      media.exposure.W2
-#                      , data = cleaned.data)
-#
-# ## estimation, with multicore processing
-# require(boot)
-# set.seed(1234)
-# boot.test1 <- boot(cleaned.data, statistic = est.cond.indirect,
-#                    R = 20000, parallel = "multicore", ncpus = 8,
-#                    lm.model.M = model.poc.1, lm.model.Y = model.perc.1,
-#                    pred = "dangerous.disc.W1",
-#                    modx = "pol.know",
-#                    med = "perceived.opinion.climate.W2")
-# out.cond <- get.boot.stats(boot.test1, type = "perc")
-# out.cond <- cbind(var = c("index.modmed",
-#                           paste0("ind.", 1:1001),
-#                           "dir.effect"), out.cond) %>% setDT(.)
-#
-# ## index of moderated mediation is sig.
-# ## boot.ci(boot.out = boot.test1, type = "bca", index = 1)
-# ## index = 1.16985 [0.099, 2.851]
-#
-#   ## plot conditional indirect effects
-#   plot.cond.ind1 <- data.frame(
-#     moderator = select.modval(cleaned.data, "pol.know"),
-#     out.cond[var %!in% c("index.modmed", "dir.effect"),]
-#     ) %>% setDT(.)
-#   ggplot(plot.cond.ind1, aes(x = moderator, y = coef)) + theme_bw() +
-#     geom_line() + geom_hline(yintercept = 0, color = "red", linetype = 2) +
-#     geom_ribbon(aes(ymin = llci, ymax = ulci), alpha = 0.25) +
-#     geom_vline(xintercept = 6.18, color = "red", lty = 2) +
-#     xlab("\nModerator: Political Knowledge") + ylab("theta") + theme_bw()
-#
 
 
   ## ------------------ ##
