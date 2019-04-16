@@ -51,25 +51,6 @@ require(pscl)
 # [65] "dis.accuracy.W2"                "dis.accuracy.W3"
 # [67] "dis.accuracy.cat.W2"            "dis.accuracy.cat.W3"
 
-## --------------------------- ##
-## Timeline of data collection ##
-## --------------------------- ##
-
-timevis(data = data.frame(
-  start = c("2012-11-27", "2012-12-11", "2012-12-21",
-            "2012-12-07", "2012-11-27"),
-  end = c("2012-11-29", "2012-12-13", "2012-12-23",
-            "2012-12-19 23:59:59", "2012-12-10 23:59:59"),
-  content = c("W1", "W2", "W3",
-              "Wave 2 Exposure (vs. W3 self-report)",
-              "Wave 1 Exposure (vs. W2 self-report)"),
-  group = c(1, 1, 1, 3, 2)),
-  groups = data.frame(id = 1:3,
-                      content = c("Panel Survey", "Log data", "Log data")),
-  showZoom = FALSE,
-  options = list(editable = TRUE, height = "200px")
-)
-
 ## ----------------------- ##
 ## Descriptive / Measures  ##
 ## ----------------------- ##
@@ -165,62 +146,25 @@ qq3 <- ggplot(qq.out3, aes(x = x, y = y)) +
   ylab("W3 Perception \n(Prop. of Exposure to disagreement)") +
   ggtitle("W2 Exposure vs. W3 Perception")
 
-## cf. mean of daily average (dangerous.disc.dlyavg.W1)
-qq.avg.out2 <- with(cleaned.data,
-                qqplot(x = dangerous.disc.dlyavg.W1,
-                       y = dangerous.disc.prcptn.W2,
-                       plot.it = FALSE)) %>% as.data.frame(.) %>% setDT(.)
-
-qq.avg.out3 <- with(cleaned.data,
-                qqplot(x = dangerous.disc.dlyavg.W2,
-                       y = dangerous.disc.prcptn.W3,
-                       plot.it = FALSE)) %>% as.data.frame(.) %>% setDT(.)
-
-qq2.avg <- ggplot(qq.avg.out2, aes(x = x, y = y)) +
-  geom_jitter(width = 0.02, color = "grey") + theme_bw() +
-  stat_smooth(aes(group = 1), color = "red", se = FALSE) +
-  geom_segment(aes(x = 0, xend = 1, y = 0, yend = 1),
-               lty = 2, color = "grey") +
-  xlab("W1 log data (Mean of daily proportion)") +
-  ylab("W2 Perception \n(Prop. of Exposure to disagreement)") +
-  ggtitle("W1 Exposure vs. W2 Perception")
-
-qq3.avg <- ggplot(qq.avg.out3, aes(x = x, y = y)) +
-  geom_jitter(width = 0.02, color = "grey") + theme_bw() +
-  stat_smooth(aes(group = 1), color = "red", se = FALSE) +
-  geom_segment(aes(x = 0, xend = 1, y = 0, yend = 1),
-               lty = 2, color = "grey") +
-  xlab("W2 log data (Mean of daily proportion)") +
-  ylab("W3 Perception \n(Prop. of Exposure to disagreement)") +
-  ggtitle("W2 Exposure vs. W3 Perception")
+require(patchwork)
+## figure 1 in the ms
+qq2 + qq3 + plot_layout(nrow = 1)
 
 
 ## check the correlation of measures
 cleaned.data[, cor.test(dangerous.disc.W1, dangerous.disc.prcptn.W2)]
 cleaned.data[, cor.test(dangerous.disc.W2, dangerous.disc.prcptn.W3)]
-bivariate.perm.test(cleaned.data,
-                    "dangerous.disc.W1", "dangerous.disc.prcptn.W2")
-bivariate.perm.test(cleaned.data,
-                    "dangerous.disc.W2", "dangerous.disc.prcptn.W3")
-
-cleaned.data[, cor.test(dangerous.disc.dlyavg.W1, dangerous.disc.prcptn.W2)]
-cleaned.data[, cor.test(dangerous.disc.dlyavg.W2, dangerous.disc.prcptn.W3)]
-bivariate.perm.test(cleaned.data,
-                    "dangerous.disc.dlyavg.W1", "dangerous.disc.prcptn.W2")
-bivariate.perm.test(cleaned.data,
-                    "dangerous.disc.dlyavg.W2", "dangerous.disc.prcptn.W3")
 
 ## permutation test indicates that the difference between
 ## perception and objective behavior is significantly differ,
 ## in a way that people tend to overestimate the exposure to differences
+RNGkind("L'Ecuyer-CMRG"); set.seed(12345)
 diff.perm.test(cleaned.data, rep = 20000,
                "dangerous.disc.prcptn.W2", "dangerous.disc.W1")
+RNGkind("L'Ecuyer-CMRG"); set.seed(12345)
 diff.perm.test(cleaned.data, rep = 20000,
                "dangerous.disc.prcptn.W3", "dangerous.disc.W2")
-diff.perm.test(cleaned.data, rep = 20000,
-               "dangerous.disc.prcptn.W2", "dangerous.disc.dlyavg.W1")
-diff.perm.test(cleaned.data, rep = 20000,
-               "dangerous.disc.prcptn.W3", "dangerous.disc.dlyavg.W2")
+
 
 ## ----------------------------------------------------------- ##
 ## Does overreporting correlated with social desiability bias? ##
@@ -230,7 +174,6 @@ diff.perm.test(cleaned.data, rep = 20000,
 ## cf. a-priory power analysis (using gpower)
 ## indicates for detecting small effect given sample size
 ## alpha is 0.07, therefore we stick to alpha = 0.5
-
 
 cleaned.data[, descriptives(dis.accuracy.W2)]
 cleaned.data[, descriptives(dis.accuracy.W3)]
@@ -244,35 +187,34 @@ model1 <- lm(dis.accuracy.W2 ~ ## predicting overestimation
                canpref.W2 + ideo_str.W2 +
                ## other controls
                log.total.exp.W1 + pol.interest.W2 + pol.know +
-                 ## demographic controls
-                 age.years + female + edu + household.income +
-                 ## media exposure
-                 media.exposure.W2
-               ,
-               data = cleaned.data)
+               ## demographic controls
+               age.years + female + edu + household.income +
+               ## media exposure
+               media.exposure.W2
+             ,
+             data = cleaned.data)
 
 model1.cat <- glm(update.formula(model1, dis.accuracy.cat.W2 ~ .),
                   binomial("logit"),
-                       data = cleaned.data)
+                  data = cleaned.data)
 
 model2 <- lm(dis.accuracy.W3 ~
-              ## focal predictor
-              discussion.norm.W3 +
-              need.for.approval.W3 + ## cf. interaction is not sig as well
-              perceived.opinion.climate.W3 +
-              canpref.W3 + ideo_str.W3 +
-              ## other controls
-              log.total.exp.W2 + pol.interest.W3 + pol.know +
-              ## demographic controls
-              age.years + female + edu + household.income +
-              ## media exposure
-              media.exposure.W2,
+               ## focal predictor
+               discussion.norm.W3 +
+               need.for.approval.W3 + ## cf. interaction is not sig as well
+               perceived.opinion.climate.W3 +
+               canpref.W3 + ideo_str.W3 +
+               ## other controls
+               log.total.exp.W2 + pol.interest.W3 + pol.know +
+               ## demographic controls
+               age.years + female + edu + household.income +
+               ## media exposure
+               media.exposure.W2,
              data = cleaned.data)
 
 model2.cat <- glm(update.formula(model2, dis.accuracy.cat.W3 ~ .),
                   binomial("logit"),
-                       data = cleaned.data)
-
+                  data = cleaned.data)
 
 ## predicting perception of exposure
 ## controlling actual exposure
@@ -308,45 +250,38 @@ model4.ols <- lm(dangerous.disc.prcptn.W3 ~
 
 
 require(boot)
-RNGkind("L'Ecuyer-CMRG")
-set.seed(12345)
+RNGkind("L'Ecuyer-CMRG"); set.seed(12345)
 boot.model1 <- boot(cleaned.data, statistic = boot.lm,
                     R = 10000, parallel = "multicore", ncpus = 8,
                     lm.fit = model1) %>% get.boot.stats(., type = "perc")
 
-RNGkind("L'Ecuyer-CMRG")
-set.seed(12345)
+RNGkind("L'Ecuyer-CMRG"); set.seed(12345)
 boot.model1.cat <- boot(cleaned.data, statistic = boot.glm,
                         R = 10000, parallel = "multicore", ncpus = 8,
                         glm.fit = model1.cat) %>% get.boot.stats(., type = "perc")
 
-RNGkind("L'Ecuyer-CMRG")
-set.seed(12345)
+RNGkind("L'Ecuyer-CMRG"); set.seed(12345)
 boot.model2 <- boot(cleaned.data, statistic = boot.lm,
                     R = 10000, parallel = "multicore", ncpus = 8,
                     lm.fit = model2) %>% get.boot.stats(., type = "perc")
 
-RNGkind("L'Ecuyer-CMRG")
-set.seed(12345)
+RNGkind("L'Ecuyer-CMRG"); set.seed(12345)
 boot.model2.cat <- boot(cleaned.data, statistic = boot.glm,
                         R = 10000, parallel = "multicore", ncpus = 8,
                         glm.fit = model2.cat) %>% get.boot.stats(., type = "perc")
 
-RNGkind("L'Ecuyer-CMRG")
-set.seed(12345)
+RNGkind("L'Ecuyer-CMRG"); set.seed(12345)
 boot.model3 <- boot(cleaned.data, statistic = boot.lm,
                         R = 10000, parallel = "multicore", ncpus = 8,
                     lm.fit = model3.ols) %>% get.boot.stats(., type = "perc")
 
-RNGkind("L'Ecuyer-CMRG")
-set.seed(12345)
+RNGkind("L'Ecuyer-CMRG"); set.seed(12345)
 boot.model4 <- boot(cleaned.data, statistic = boot.lm,
                     R = 10000, parallel = "multicore", ncpus = 8,
                     lm.fit = model4.ols) %>% get.boot.stats(., type = "perc")
 
 require(texreg)
-
-## Table 2 in the main ms and A1 in the appendix
+## Table 1 in the main ms and A1 in the appendix
 screenreg(list(model1, model1.cat, #model1.luc,
                model2, model2.cat), #model2.luc),
           stars = c(0.001, 0.01, 0.05, 0.10), digits = 3,
@@ -372,6 +307,12 @@ screenreg(list(model1, model1.cat, #model1.luc,
                         "Opinion Climate" = 5,
                         "Controls" = 6:9,
                         "Demographics" = 10:13))
+
+## cf. Pseudo-Rsq
+require(rcompanion)
+nagelkerke(model1.cat)$Pseudo.R.squared.for.model.vs.null[3] # Nagelkerke R-sq
+nagelkerke(model2.cat)$Pseudo.R.squared.for.model.vs.null[3]
+
 
 ## Table A3 in the appendix, predicting perceived exposure to disagreement
 screenreg(list(model3.ols, model4.ols),
@@ -401,100 +342,6 @@ screenreg(list(model3.ols, model4.ols),
 
 
 
-
-# plotreg(list(model1, model2),
-#         custom.model.names = c("Inaccuracy, W1 log vs. W2 perception",
-#                                "Inaccuracy, W2 log vs. W3 perception"),
-#         custom.coef.names = list(
-#           c("(Intercept)", "Discussion norm W2",
-#             "Need for approval W2", "Prcvd Op Climate W2",
-#             "Candidate pref W2", "Ideo Strength W2",
-#             "Total Exp W1 (log)", "Interest W2", "Knowledge",
-#             "Age (in years)", "Female", "Education", "HH income",
-#             "Media Exposure"),
-#           ## Wave 2 model
-#           c("(Intercept)", "Discussion norm W3", "Need for approval W3",
-#             "Prcvd Op Climate W3", "Candidate pref W3", "Ideo Strength W3",
-#             "Total Exp W2 (log)", "Interest W3", "Knowledge",
-#             "Age (in years)", "Female", "Education", "HH income",
-#             "Media Exposure")),
-#         omit.coef = c("(Intercept)|(Candidate)"),
-#         mfrow = T, lwd.inner = 5, custom.note = "Note: Bars denote 95% CIs",
-#         lwd.zerobar = 2,
-#         insignif.dark = "gray",
-#         insignif.light = "gray80",
-#         insignif.medium = "gray")
-
-## standardized effects using jtools::plot_summs
-require(jtools)
-p_coef <- plot_summs(model1, model2, scale = TRUE, n.sd = 2,
-           colors = "Qual2",
-           model.names = c("W1 log-data vs. W2 perception",
-                           "W2 log-data vs. W3 perception"),
-           legend.title = "DV: Inaccuracy",
-           coefs = c("Discussion norm" = "discussion.norm.W2",
-                     "Discussion norm" = "discussion.norm.W3",
-                     "Need for approval" = "need.for.approval.W2",
-                     "Need for approval" = "need.for.approval.W3",
-                     "Prcvd Op Climate" = "perceived.opinion.climate.W2",
-                     "Prcvd Op Climate" = "perceived.opinion.climate.W3",
-                     "Political Interest" = "pol.interest.W2",
-                     "Political Interest" = "pol.interest.W3",
-                     "Political Knowledge" = "pol.know"))
-
-p_coef + xlab("Standardized effects (2SD difference)") + ylab("") + theme_bw() +
-  theme(legend.position = "bottom")
-
-
-
-## cf. Pseudo-Rsq
-require(rcompanion)
-nagelkerke(model1.cat)$Pseudo.R.squared.for.model.vs.null[3] # Nagelkerke R-sq
-nagelkerke(model2.cat)$Pseudo.R.squared.for.model.vs.null[3]
-
-# model1.agr <- lm(agr.accuracy.W2 ~
-#                ## focal predictor
-#                discussion.norm.W2 +
-#                perceived.opinion.climate.W2 +
-#                log.total.exp.W1 +
-#                ## demographic controls
-#                age.years + female + edu + household.income +
-#                ## political correlates
-#                canpref.W2 + pol.interest.W2 + pol.know + ideo_str.W2 +
-#                ## media exposure
-#                media.exposure.W2
-#              ,
-#              data = cleaned.data)
-#
-# model1.agr.cat <- glm(update.formula(model1.agr, agr.accuracy.cat.W2 ~ .),
-#                   binomial("logit"),
-#                   data = cleaned.data)
-#
-# model2.agr <- lm(agr.accuracy.W3 ~
-#                ## focal predictor
-#                discussion.norm.W3 +
-#                perceived.opinion.climate.W3 +
-#                log.total.exp.W2 +
-#                ## demographic controls
-#                age.years + female + edu + household.income +
-#                ## political correlates
-#                canpref.W3 + pol.interest.W2 +
-#                pol.know + ideo_str.W3 +
-#                ## media exposure
-#                media.exposure.W2,
-#              data = cleaned.data)
-#
-# model2.agr.cat <- glm(update.formula(model2.agr, agr.accuracy.cat.W3 ~ .),
-#                   binomial("logit"),
-#                   data = cleaned.data)
-#
-# screenreg(list(model1.agr, model1.agr.cat,
-#                model2.agr, model2.agr.cat),
-#           stars = c(0.001, 0.01, 0.05, 0.10), digits = 3,
-#           custom.model.names = c("AGR OLS W2", "AGR GLM W2",
-#                                  "AGR OLS W3", "AGR GLM W3"))
-
-
 ## ---------------------------------------- ##
 ## What about cognitive bias and burdens?   ##
 ## (using an average of most recent 3-days) ##
@@ -519,7 +366,7 @@ qq2r <- ggplot(qq.out2.r, aes(x = x, y = y)) +
                lty = 2, color = "grey") +
   xlab("W1 log data \n(Cumulative proportion, most recent three days)") +
   ylab("W2 Perception \n(Prop. of Exposure to diagreement)") +
-  ggtitle("W1 Recent three-day Exposure vs. W2 Perception")
+  ggtitle("W1 Recent 3-day vs. W2 Perception")
 
 qq3r <- ggplot(qq.out3.r, aes(x = x, y = y)) +
   geom_jitter(width = 0.02, color = "grey") + theme_bw() +
@@ -528,10 +375,10 @@ qq3r <- ggplot(qq.out3.r, aes(x = x, y = y)) +
                lty = 2, color = "grey") +
   xlab("W2 log data \n(Cumulative proportion, most recent three days)") +
   ylab("W3 Perception \n(Prop. of Exposure to diagreement)") +
-  ggtitle("W2 Recent three-day Exposure vs. W3 Perception")
+  ggtitle("W2 Recent 3-day vs. W3 Perception")
 
-## Figure 1
-qq2 + qq3 + qq2.avg + qq3.avg + qq2r + qq3r + plot_layout(nrow = 3, ncol = 2)
+## Figure 2
+qq2r + qq3r + plot_layout(ncol = 2)
 
 
 ## test of equality of two correlation coefficients
@@ -539,6 +386,7 @@ qq2 + qq3 + qq2.avg + qq3.avg + qq2r + qq3r + plot_layout(nrow = 3, ncol = 2)
 require(cocor)
 
 ## Wave 2 measures
+RNGkind("L'Ecuyer-CMRG"); set.seed(12345)
 cocor(~ dangerous.disc.prcptn.W2 + recent.dangerous.disc.W1 |
         dangerous.disc.prcptn.W2 + dangerous.disc.W1, data = cleaned.data)
 
@@ -560,8 +408,6 @@ cocor(~ dangerous.disc.prcptn.W3 + recent.dangerous.disc.W2 |
 # 95% confidence interval for r.jk - r.jh: [-0.0574, 0.0167]
 ## RESULTS INDICATES THERE IS NO SIGNIFICANT DIFFERENCES
 
-
-
 ## replicate the models
 model1r <- lm(update.formula(model1,
                recent.accuracy.W2 ~ .
@@ -572,16 +418,19 @@ model2r <- lm(update.formula(model2,
                + log.recent.total.exp.W2 - log.total.exp.W2),
               data = cleaned.data)
 
+RNGkind("L'Ecuyer-CMRG"); set.seed(12345)
 boot.model1r <- boot(cleaned.data, statistic = boot.lm,
                     R = 10000, parallel = "multicore", ncpus = 8,
                     lm.fit = model1r) %>% get.boot.stats(., type = "perc")
 
+RNGkind("L'Ecuyer-CMRG"); set.seed(12345)
 boot.model2r <- boot(cleaned.data, statistic = boot.lm,
                     R = 10000, parallel = "multicore", ncpus = 8,
                     lm.fit = model2r) %>% get.boot.stats(., type = "perc")
 
 
 require(texreg)
+## Table 2 in the main ms and Table A4 in the appendix
 screenreg(list(model1, model1r, model2, model2r),
           stars = c(0.001, 0.01, 0.05, 0.10), digits = 3,
           custom.model.names = c("OLS W2", "OLS W2 RECENT",
@@ -614,7 +463,6 @@ screenreg(list(model1, model1r, model2, model2r),
   ## ------------------ ##
 
 ## Consequences of biased estimate of exposure to disagreement?
-
 terms <- c("pref.certainty.W3", "pref.certainty.W2", "dangerous.disc.W2",
            "dangerous.disc.prcptn.W3", "log.total.exp.W2", "age.years",
            "female", "edu", "household.income", "canpref.W2",
@@ -645,6 +493,7 @@ cleaned.data[, dangerous.disc.prcptn.W3.r := dangerous.disc.prcptn.W3/100]
                                          - dangerous.disc.prcptn.W3),
                           data = cleaned.data[index, ])
 
+## Table 3 in the main ms and Table A5 in the appendix
 screenreg(list(model.certainty.1, model.certainty.2), digits = 3,
           custom.model.names = c("Pref Cernty Sbj", "Pref Cernty Obj"),
           custom.coef.names = c("(Intercept)", "Pref Certainty W2",
