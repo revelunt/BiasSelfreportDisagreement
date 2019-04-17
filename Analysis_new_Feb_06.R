@@ -13,6 +13,7 @@ require(lavaan)
 require(jtools)
 require(interactions)
 require(pscl)
+require(ggthemes)
 
 ## we use 'cleaned.data' for the rest of the analysis
 # > colnames(cleaned.data)
@@ -566,7 +567,8 @@ sim.results <- do.call("rbind", reps) %>% setDT(.)
 save(sim.results, file = "sim.results.Rdata")
 
 ## bias, relative.size.sbj, coef.obj, sbj.coef.agree.with.obj
-
+cbp1 <- c("#999999", "#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 ## whether significance of sbj measure agree with obj measures?
 p3_1 <- sim.results[, .(agree = mean(sbj.coef.agree.with.obj),
                 llci = prop.cis(mean(sbj.coef.agree.with.obj), 1000)[1],
@@ -574,11 +576,12 @@ p3_1 <- sim.results[, .(agree = mean(sbj.coef.agree.with.obj),
             by = c("target.corr", "sample_n")] %>%
   ggplot(., aes(x = target.corr, y = agree, color = factor(sample_n))) +
   geom_smooth(aes(ymin = llci, ymax = ulci), alpha = 0.3) +
-  xlab("Zero-order correlation between subjective and objective measure") +
+  xlab("Zero-order corr. between subjective and objective measure") +
   ylab("Proportion of two results agree") + theme_bw() +
   scale_x_continuous(breaks = seq(0, 0.95, 0.1)) +
-  theme(legend.position = "none") +
-  geom_vline(xintercept = cor.obs[2,14], linetype = 2, col = "red")
+  theme(legend.position = "none") + scale_color_brewer(palette = "Dark2") +
+  geom_vline(xintercept = cor.obs[2,14], linetype = 2, col = "red") +
+  ggtitle("Panel A: Proportions of two results with same statistical significance")
 
 ## absolute bias of sbj measure agree against obj measures
 p3_2 <- sim.results[, .(bias = median(bias),
@@ -588,10 +591,13 @@ p3_2 <- sim.results[, .(bias = median(bias),
   ggplot(., aes(x = target.corr, y = bias, group = factor(sample_n))) +
   geom_ribbon(aes(ymin = llci, ymax = ulci), fill = "grey70", alpha = 0.3) +
   geom_smooth(method = "lm", se = FALSE, aes(color = factor(sample_n))) +
-  xlab("") + ylab("Mean bias of subjective measure") + theme_bw() +
+  xlab("") + ylab("Mean bias, subjective measure") + theme_bw() +
+  xlab("Zero-order corr. between subjective and objective measure") +
   geom_hline(yintercept = bias.obs, linetype = 2, col = "red") +
   geom_vline(xintercept = cor.obs[2,14], linetype = 2, col = "grey") +
-  facet_grid(~ sample_n) + theme(legend.position = "none")
+  scale_color_brewer(palette = "Dark2") +
+  facet_grid(~ sample_n) + theme(legend.position = "none") +
+  ggtitle("\nPanel B: Absolute bias, coefficient from subjective measure")
 
 ## relative size of subjective measure
 p3_3 <- sim.results[, .(median.relative.size = median(relative.size.sbj),
@@ -601,10 +607,11 @@ p3_3 <- sim.results[, .(median.relative.size = median(relative.size.sbj),
   ggplot(., aes(x = target.corr, y = median.relative.size)) +
   geom_ribbon(aes(ymin = llci, ymax = ulci), fill = "grey70", alpha = 0.3) +
   geom_smooth(method = "lm", se = FALSE, aes(color = factor(sample_n))) +
-  xlab("Zero-order correlation between subjective and objective measure") +
-  ylab("Relative size of subjective vs. objective measure") + theme_bw() +
+  xlab("Zero-order corr. between subjective and objective measure") +
+  ylab("Relative size, subjective measure") + theme_bw() +
   geom_hline(yintercept = relative.size.sbj.obs, linetype = 2, col = "red") +
-  scale_colour_discrete(name = "Sample N") +
-  theme(legend.position = "bottom") + facet_grid(~ sample_n)
+  scale_colour_discrete(name = "Sample N") + scale_color_brewer(palette = "Dark2") +
+  theme(legend.position = "bottom") + facet_grid(~ sample_n) +
+  ggtitle("\nPanel C: Relative size, coefficient from subjective measure")
 
 p3_1 + p3_2 + p3_3 + plot_layout(nrow = 3)

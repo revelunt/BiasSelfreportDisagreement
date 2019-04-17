@@ -7,12 +7,14 @@ rm(list = ls())
 list.of.packages <- c("car", "psych","texreg","rstudioapi","data.table",
                       "devtools", "formula.tools", "haven", "magrittr",
                       "igraph", "intergraph", "ggplot2", "jtools", "plotROC",
-                      "pscl", "rcompanion")
+                      "pscl", "rcompanion", "ggthemes")
 new.packages <- list.of.packages[!(list.of.packages %in%
                                      installed.packages()[,"Package"])]
 if(length(new.packages)) devtools::install_cran(new.packages, dependencies = T)
 if(!("patchwork" %in% installed.packages()[,"Package"]))
   devtools::install_github("thomasp85/patchwork")
+if(!("colorblindr" %in% installed.packages()[,"Package"]))
+  devtools::install_github("clauswilke/colorblindr")
 if(!("interactions" %in% installed.packages()[,"Package"]))
   source("https://install-github.me/jacob-long/interactions")
 

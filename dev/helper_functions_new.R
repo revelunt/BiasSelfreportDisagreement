@@ -453,12 +453,12 @@ sim.MC <- function(sample_n, target.corr) {
     model.obj.resample <- lm(formula(model.certainty.2),
                              data = simulated.data) ## DV = certainty
 
-    ## grap standarzied coefficietns and their significance
+    ## get unstandarzied coefficients and their significance levels
     coef.sbj <- coef(summary(model.sbj.resample))['dangerous.disc.prcptn.W3', 1]
     coef.obj <- coef(summary(model.obj.resample))['dangerous.disc.W2', 1]
 
-    sig.sbj <- coef(summary(model.sbj.resample))['dangerous.disc.prcptn.W3', 4] < alpha
-    sig.obj <- coef(summary(model.obj.resample))['dangerous.disc.W2', 4] < alpha
+    sig.sbj <- coef(summary(model.sbj.resample))['dangerous.disc.prcptn.W3', 4] <= alpha
+    sig.obj <- coef(summary(model.obj.resample))['dangerous.disc.W2', 4] <= alpha
 
     est <- c(sample_n,
              target.corr,
