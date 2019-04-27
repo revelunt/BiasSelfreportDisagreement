@@ -2,6 +2,10 @@
 .Rhistory
 .RData
 .Ruserdata
+sim.results.Rdata
 *.doc
 Draft/~$pendix.docx
 Draft/Appendix.pdf
+Draft/*
+Docs/*
+Dat/*
