@@ -485,3 +485,51 @@ prop.cis <- function(prop, n) {
   CIs <- prop + c(-1*errors, errors)
   CIs
 }
+
+
+## QQplot function
+
+make_qqplot <- function(data = cleaned.data, type = c("candpref", "ideo3", "ideo2")) {
+
+  if(is.null(data)) data <- cleaned.data
+
+  W2.xvar <- paste("dangerous.disc.W1", type, sep = ".")
+  W2.yvar <- paste("dangerous.disc.prcptn.W2", type, sep = ".")
+  W3.xvar <- paste("dangerous.disc.W2", type, sep = ".")
+  W3.yvar <- paste("dangerous.disc.prcptn.W3", type, sep = ".")
+
+  qq.out2 <- qqplot(x = sapply(data[, W2.xvar, with = F], as.numeric),
+                    y = sapply(data[, W2.yvar, with = F], as.numeric),
+                    plot.it = FALSE) %>% as.data.frame(.) %>% setDT(.)
+
+  qq.out3 <- qqplot(x = sapply(data[, W3.xvar, with = F], as.numeric),
+                    y = sapply(data[, W3.yvar, with = F], as.numeric),
+                    plot.it = FALSE) %>% as.data.frame(.) %>% setDT(.)
+
+  qq2 <- ggplot(qq.out2, aes(x = x, y = y)) +
+    geom_jitter(width = 0.02, color = "grey") + theme_bw() +
+    stat_smooth(aes(group = 1), color = "red", se = FALSE) +
+    geom_segment(aes(x = 0, xend = 1, y = 0, yend = 1),
+                 lty = 2, color = "grey") +
+    xlab("W1 log data") + ylab("W2 Perception") +
+    ggtitle("W1 Exposure vs. W2 Perception")
+
+  qq3 <- ggplot(qq.out3, aes(x = x, y = y)) +
+    geom_jitter(width = 0.02, color = "grey") + theme_bw() +
+    stat_smooth(aes(group = 1), color = "red", se = FALSE) +
+    geom_segment(aes(x = 0, xend = 1, y = 0, yend = 1),
+                 lty = 2, color = "grey") +
+    xlab("W2 log data") + ylab("W3 Perception") +
+    ggtitle("W2 Exposure vs. W3 Perception")
+
+  require(patchwork)
+  ## figure 1 in the ms
+  fig <- qq2 + qq3 + plot_layout(nrow = 1)
+  print(fig)
+
+}
+
+
+
+
+
