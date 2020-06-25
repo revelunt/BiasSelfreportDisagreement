@@ -77,7 +77,7 @@ setMethod("extract", signature = className("brmsfit", "brm"),
 
 RNGkind("L'Ecuyer-CMRG")
 set.seed(12345)
-model1.brm <- brm(dis.accuracy.W2 ~ ## predicting overestimation
+model1.brm <- brm(dis.accuracy.W2.candpref ~ ## predicting overestimation
                     ## social desirability
                     discussion.norm.W2 +
                     need.for.approval.W2 + ## cf. interaction is not sig as well
@@ -518,3 +518,39 @@ ggplot(cor.mat2, aes(x = date.ranges, y = corr, fill = factor(wave))) +
   ylab("Zero-order corr.") +
   xlab("Date ranges (i.e., recent k days until the survey date)") +
   ggtitle("Correlations b/w behavioral (daily averages) vs. perceptional measures")
+
+
+## How do respondents' activites on the forum correspond to activities in everyday life?
+## mean number of days R visits online forums
+## W1 (pv1) is about their ordinary activities,
+## and we compare this to our behavioral data
+
+dat[, mean(pv1 - 1)] ## days R visited online forums
+## from no visit (1) to every day (8). so we substract 1 to make it everyday = 7
+
+## for tracking data:
+net[, 1, by = c("reader.id", "reading.date")][, sum(V1), by = reader.id][, V1/4] %>% mean
+net[, 1, by = c("reader.id", "reading.date")][, sum(V1), by = reader.id][, V1/4] %>% sd
+t.test(dat[, pv1 - 1],
+       net[, 1, by = c("reader.id", "reading.date")][, sum(V1), by = reader.id][, V1/4],
+       paired = T)
+
+## writing
+dat[, pv6] %>% mean ## writing
+dat[, pv6] %>% sd ## writing
+
+dat[, car::recode(쓰기_sum, "NA = 0")/4] %>% mean
+dat[, car::recode(쓰기_sum, "NA = 0")/4] %>% sd
+
+t.test(dat[, pv6] ,
+       dat[, car::recode(쓰기_sum, "NA = 0")/4],
+       paired = T)
+
+#
+# dat[, pv5] %>% mean ## reading others' postings
+# dat[, pv5] %>% sd
+#
+# net[, count := 1]
+# net[, (sum(count)/4), by = reader.id] %>% .[, mean(V1)]
+# net[, (sum(count)/4), by = reader.id] %>% .[, sd(V1)]
+#

@@ -480,6 +480,14 @@ setDT(cleaned.data)
   reader.ids.W1 <- net[reading.date %in% date.range[5:18], reader.id]
   poster.ids.W1 <- net[reading.date %in% date.range[5:18], poster.id]
 
+
+
+
+
+
+
+
+
   cleaned.data <- merge(cleaned.data,
                         ## filter until W2 (18th days)
                         net[reading.date %in% date.range[5:18],

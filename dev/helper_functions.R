@@ -47,15 +47,17 @@ diff.perm.test <- function(data, var1, var2,
 
   var1 <- data[, get(var1)]
   var2 <- data[, get(var2)]
+  dat <- cbind(var1, var2) %>% as.data.frame
+  dat <- na.omit(dat)
 
-  diff.obs <- (var1 - var2)
+  diff.obs <- (dat$var1 - dat$var2)
   diff.obs.m <- mean(diff.obs)
 
   ## functions taken from wPerm
   perm <- sort(sapply(seq_len(rep), function(x) {
-    b <- rbinom(length(var2), 1, 0.5)
-    var1.resample <- b * var1 + (1 - b) * var2
-    var2.resample <- (1 - b) * var1 + b * var2
+    b <- rbinom(length(dat$var2), 1, 0.5)
+    var1.resample <- b * dat$var1 + (1 - b) * dat$var2
+    var2.resample <- (1 - b) * dat$var1 + b * dat$var2
     diff.perm <- (var1.resample - var2.resample)
     mean(diff.perm)
   }))
@@ -128,10 +130,10 @@ add.demographics <- function(data.to.process, dat) {
 ## --------------------- ##
 
 ## print standardized beta
-require(sjstats)
-std.lm <- function(lm.model) {
-  sjstats::std_beta(lm.model,  type = "std2")
-}
+# require(sjstats)
+# std.lm <- function(lm.model) {
+#   sjstats::std_beta(lm.model,  type = "std2")
+# }
 
 boot.lm <- function(lm.fit, dat, i) {
   resample <- dat[i,]
@@ -337,33 +339,39 @@ est.cond.indirect <- function(dat, ## data frame to pass for bootstrapping
 
 ## simulation functions
 ## define MC power function
-sim.MC.power.obj <- function(sample_n) {
+sim.MC.power.obj <- function(sample_n, data = dat.subset1) {
 
-  mu0 <- cleaned.data[, apply(.SD, 2, mean, na.rm = T), .SDcols = var.names]
-  sigma <- cov(cleaned.data[, .SD, .SDcols = var.names], use = "complete.obs")
+  mu0 <- data[, apply(.SD, 2, mean, na.rm = T), .SDcols = variables]
+  vars <- data[, apply(.SD, 2, var, na.rm = T), .SDcols = variables]
+  sigma <- cor(data[, .SD, .SDcols = variables], use = "complete.obs")
 
-  sim.run <- mclapply(seq_len(5000), function(k) { ## based on 1000 replications
+  sim.run <- mclapply(seq_len(5000), function(k) { ## based on 5000 replications
     ## simulate the data given N based on mean and cov of exogenous variables
     ## and manipulate partial correlation of subjective vs. objective measure,
     ## derive modified zero-order correlation coef. and simulate dataset
-    simulated.data <- mvrnorm(n = sample_n,
-                              mu = mu0,
-                              Sigma = sigma,
-                              empirical = FALSE)
+
+    simulated.data <- BinNor::jointly.generate.binary.normal(no.rows = sample_n, no.bin = 2,
+                                           no.nor = 12,
+                                           prop.vec.bin = mu0[c(7,11)], # "female" & "canpref.W2"
+                                           mean.vec.nor = mu0[-c(7, 11)],
+                                           var.nor = vars[-c(7, 11)],
+                                           sigma_star = sigma[c(7,11,1:6,8:10,12:14), c(7,11,1:6,8:10,12:14)]
+                                           )
+    colnames(simulated.data) <- names(mu0)[c(7,11,1:6,8:10,12:14)]
     simulated.data <- as.data.frame(simulated.data) %>% setDT(.)
 
     ## create pref.certainty.W3 based on model using obj measure
     ## and add random noise to simulate Y values
-    simulated.data[, pref.certainty.W3 :=
-                     predict(model.certainty.2, newdata = simulated.data) +
-                     rnorm(.N, mean = 0, sd = sd(model.certainty.2$residuals))]
+    simulated.data[, ambi.W3 :=
+                     predict(model.ambi.2, newdata = simulated.data) +
+                     rnorm(.N, mean = 0, sd = sd(model.ambi.2$residuals))]
     ## Using simulated data, refit the model, recover coefficients
-    model.obj.resample <- lm(formula(model.certainty.2),
+    model.obj.resample <- lm(formula(model.ambi.2),
                              data = simulated.data) ## DV = certainty
 
     ## grap standarzied coefficietns and their significance
-    coef <- coef(summary(model.obj.resample))['dangerous.disc.W2', 1]
-    sig <- coef(summary(model.obj.resample))['dangerous.disc.W2', 4]
+    coef <- coef(summary(model.obj.resample))['dangerous.disc.W2.candpref:canpref.W2', 1]
+    sig <- coef(summary(model.obj.resample))['dangerous.disc.W2.candpref:canpref.W2', 4]
 
     est <- c(sample_n = sample_n, coef = coef, sig = sig)
     est
@@ -376,33 +384,39 @@ sim.MC.power.obj <- function(sample_n) {
   sim.run
 }
 
-sim.MC.power.sbj <- function(sample_n) {
+sim.MC.power.sbj <- function(sample_n, data = dat.subset1) {
 
-  mu0 <- cleaned.data[, apply(.SD, 2, mean, na.rm = T), .SDcols = var.names]
-  sigma <- cov(cleaned.data[, .SD, .SDcols = var.names], use = "complete.obs")
+  mu0 <- data[, apply(.SD, 2, mean, na.rm = T), .SDcols = variables]
+  vars <- data[, apply(.SD, 2, var, na.rm = T), .SDcols = variables]
+  sigma <- cor(data[, .SD, .SDcols = variables], use = "complete.obs")
 
   sim.run <- mclapply(seq_len(5000), function(k) { ## based on 1000 replications
     ## simulate the data given N based on mean and cov of exogenous variables
     ## and manipulate partial correlation of subjective vs. objective measure,
     ## derive modified zero-order correlation coef. and simulate dataset
-    simulated.data <- mvrnorm(n = sample_n,
-                              mu = mu0,
-                              Sigma = sigma,
-                              empirical = FALSE)
+    simulated.data <- BinNor::jointly.generate.binary.normal(no.rows = sample_n, no.bin = 2,
+                                                             no.nor = 12,
+                                                             prop.vec.bin = mu0[c(7,11)], # "female" & "canpref.W2"
+                                                             mean.vec.nor = mu0[-c(7, 11)],
+                                                             var.nor = vars[-c(7, 11)],
+                                                             sigma_star = sigma[c(7,11,1:6,8:10,12:14), c(7,11,1:6,8:10,12:14)]
+    )
+    colnames(simulated.data) <- names(mu0)[c(7,11,1:6,8:10,12:14)]
     simulated.data <- as.data.frame(simulated.data) %>% setDT(.)
+
 
     ## create pref.certainty.W3 based on model using obj measure
     ## and add random noise to simulate Y values
-    simulated.data[, pref.certainty.W3 :=
-                     predict(model.certainty.1, newdata = simulated.data) +
-                     rnorm(.N, mean = 0, sd = sd(model.certainty.1$residuals))]
+    simulated.data[, ambi.W3 :=
+                     predict(model.ambi.1, newdata = simulated.data) +
+                     rnorm(.N, mean = 0, sd = sd(model.ambi.1$residuals))]
     ## Using simulated data, refit the model, recover coefficients
-    model.sbj.resample <- lm(formula(model.certainty.1),
+    model.sbj.resample <- lm(formula(model.ambi.1),
                              data = simulated.data) ## DV = certainty
 
     ## grap standarzied coefficietns and their significance
-    coef <- coef(summary(model.sbj.resample))['dangerous.disc.prcptn.W3.r', 1]
-    sig <- coef(summary(model.sbj.resample))['dangerous.disc.prcptn.W3.r', 4]
+    coef <- coef(summary(model.sbj.resample))["dangerous.disc.prcptn.W3.candpref:canpref.W2", 1]
+    sig <- coef(summary(model.sbj.resample))["dangerous.disc.prcptn.W3.candpref:canpref.W2", 4]
 
     est <- c(sample_n = sample_n, coef = coef, sig = sig)
     est
@@ -414,61 +428,88 @@ sim.MC.power.sbj <- function(sample_n) {
   sim.run <- data.frame(sim.run) %>% setDT(.)
   sim.run
 }
+
 
 ## define main simulation function
-sim.MC <- function(sample_n, target.corr) {
+sim.MC <- function(sample_n, target.corr, n_reps,
+                   data = dat.subset1, model_vars = variables) {
 
   ## Manipulate correlation of subjective vs. objective measure,
   ## derive modified covariance matrix
-  cor.mat <- cor.obs
-  cor.mat["dangerous.disc.prcptn.W3", "dangerous.disc.W2"] <- target.corr
-  cor.mat["dangerous.disc.W2", "dangerous.disc.prcptn.W3"] <- target.corr
-  cov.mat <- psych::cor2cov(cor.mat, sds)
+  model_vars <- model_vars[model_vars != "ambi.W3"]
+  mu0 <- data[, apply(.SD, 2, mean, na.rm = T), .SDcols = model_vars]
+  vars <- data[, apply(.SD, 2, var, na.rm = T), .SDcols = model_vars]
+  sigma <- cor(data[, .SD, .SDcols = model_vars], use = "complete.obs")
+
+  sigma_star <- sigma
+  sigma_star["dangerous.disc.prcptn.W3.candpref", "dangerous.disc.W2.candpref"] <- target.corr
+  sigma_star["dangerous.disc.W2.candpref", "dangerous.disc.prcptn.W3.candpref"] <- target.corr
 
   if (sample_n == 341) {
     alpha = 0.05
-  } else if (sample_n == 1000) {
+  } else {
     alpha = 0.01
-  } else { alpha = 0.001 }
+  }
 
-  sim.run <- mclapply(seq_len(1000), function(k) { ## based on 1000 replications
+  sim.run <- mclapply(seq_len(n_reps), function(k) { ## based on "n_reps" no. of replications (e.g., 1000)
     ## simulate the data given N based on mean and cov from manipulated covmat
-    simulated.data <- mvrnorm(n = sample_n,
-                              mu = mu,
-                              Sigma = cov.mat,
-                              empirical = TRUE)
-    colnames(simulated.data) <- var.names
+    simulated.data <- BinNor::jointly.generate.binary.normal(no.rows = sample_n,
+                                no.bin = 2, no.nor = 11, prop.vec.bin = mu0[c(6,10)], # "female" & "canpref.W2"
+                                mean.vec.nor = mu0[-c(6,10)], var.nor = vars[-c(6,10)],
+                                sigma_star = sigma_star[c(6,10,1:5,7:9,11:13), c(6,10,1:5,7:9,11:13)]
+    )
+    colnames(simulated.data) <- names(mu0)[c(6,10,1:5,7:9,11:13)]
     simulated.data <- as.data.frame(simulated.data) %>% setDT(.)
 
-    ## create pref.certainty.W3 based on model using obj measure
-    ## and add random noise to simulate Y values
-    simulated.data[, pref.certainty.W3 :=
-                     predict(model.certainty.2, newdata = simulated.data) +
-                     rnorm(.N, mean = mean(model.certainty.2$residuals),
-                           sd = sd(model.certainty.2$residuals))]
+    simulated.corr <- simulated.data[, cor(dangerous.disc.prcptn.W3.candpref, dangerous.disc.W2.candpref)]
+
+    # ## create tolerance.W3 based on model using obj measure
+    # ## and add random noise to simulate Y values
+    simulated.data[, ambi.W3 :=
+                     predict(model.ambi.2, newdata = simulated.data) +
+                     rnorm(.N, mean = 0,
+                           sd = sd(model.ambi.2$residuals))]
 
     ## Using simulated data, refit the model, recover coefficients
-    model.sbj.resample <- lm(formula(model.certainty.1),
-                             data = simulated.data) ## DV = certainty
-    model.obj.resample <- lm(formula(model.certainty.2),
-                             data = simulated.data) ## DV = certainty
+    model.sbj.resample <- lm(formula(model.ambi.1),
+                             data = data.frame(simulated.data)) ## DV = ambivalence
+    model.obj.resample <- lm(formula(model.ambi.2),
+                             data = data.frame(simulated.data)) ## DV = ambivalence
 
     ## get unstandarzied coefficients and their significance levels
-    coef.sbj <- coef(summary(model.sbj.resample))['dangerous.disc.prcptn.W3', 1]
-    coef.obj <- coef(summary(model.obj.resample))['dangerous.disc.W2', 1]
+    coef.sbj <- coef(model.sbj.resample)["dangerous.disc.prcptn.W3.candpref:canpref.W2"]
+    coef.obj <- coef(model.obj.resample)["dangerous.disc.W2.candpref:canpref.W2"]
 
-    sig.sbj <- coef(summary(model.sbj.resample))['dangerous.disc.prcptn.W3', 4] <= alpha
-    sig.obj <- coef(summary(model.obj.resample))['dangerous.disc.W2', 4] <= alpha
+    sim.slopes.sbj <- interactions::sim_slopes(model.sbj.resample, dangerous.disc.prcptn.W3.candpref, canpref.W2)
+    sim.slopes.obj <- interactions::sim_slopes(model.obj.resample, dangerous.disc.W2.candpref, canpref.W2)
 
-    est <- c(sample_n,
-             target.corr,
-             abs(coef.sbj - coef.obj), ## relative size of bias, abs of difference
-             coef.sbj/coef.obj, ## relative size of subjective coef
-             coef.obj, ## size of effect
-             sig.obj, ## true effect significant?
-             sig.obj == sig.sbj) ## whether results agree?
-    names(est) <- c("sample_n", "target.corr", "bias", "relative.size.sbj",
-                    "coef.obj", "coef.obj.sig", "sbj.coef.agree.with.obj")
+    cond.eff.sbj <- sim.slopes.sbj$slopes[2,2]
+    cond.eff.obj <- sim.slopes.obj$slopes[2,2]
+
+    ## smaller than alpha?
+    sig.sbj <- coef(summary(model.sbj.resample))['dangerous.disc.prcptn.W3.candpref:canpref.W2', 4]
+    sig.obj <- coef(summary(model.obj.resample))['dangerous.disc.W2.candpref:canpref.W2', 4]
+
+    cond.eff.sig.sbj <- sim.slopes.sbj$slopes[2,7]
+    cond.eff.sig.obj <- sim.slopes.obj$slopes[2,7]
+
+    est <- c(sample_n = sample_n,
+             target.corr = target.corr,
+             simulated.corr = simulated.corr,
+             coef.sbj = coef.sbj,
+             coef.obj = coef.obj, ## size of effect
+             cond.eff.sbj = cond.eff.sbj,
+             cond.eff.obj = cond.eff.obj,
+             sig.sbj = sig.sbj,
+             sig.obj = sig.obj, ## true effect significant?
+             cond.eff.sig.sbj = cond.eff.sig.sbj,
+             cond.eff.sig.obj = cond.eff.sig.obj)
+
+    names(est) <- c("sample_n", "target.corr", "simulated.corr",
+                    "coef.sbj", "coef.obj",
+                    "cond.eff.sbj", "cond.eff.obj",
+                    "sig.sbj" , "sig.obj",
+                    "cond.eff.sig.sbj", "cond.eff.sig.obj")
     est
 
   }, mc.cores = parallel::detectCores(T))
@@ -478,6 +519,7 @@ sim.MC <- function(sample_n, target.corr) {
   sim.run <- data.frame(sim.run) %>% setDT(.)
   sim.run
 }
+
 
 prop.cis <- function(prop, n) {
   SE <- sqrt(prop * (1 - prop) / n)
@@ -529,7 +571,200 @@ make_qqplot <- function(data = cleaned.data, type = c("candpref", "ideo3", "ideo
 
 }
 
+## K-S plot function
+
+minmax <- function(xvar, yvar) {
+
+  cdf1 <- ecdf(xvar)
+  cdf2 <- ecdf(yvar)
+  # find min and max statistics to draw line between points of greatest distance
+  minMax <- seq(min(xvar, yvar), max(xvar, yvar),  length.out = length(xvar))
+  x0 <- minMax[which( abs(cdf1(minMax) - cdf2(minMax)) == max(abs(cdf1(minMax) - cdf2(minMax))) )]
+  y0 <- cdf1(x0)
+  y1 <- cdf2(x0)
+
+  minmax <- data.frame(x0 = x0[1], y0 = y0[1], y1 = y1[1])
+  print(minmax)
+
+}
+
+make_ks_plot <- function(data = cleaned.data,
+                         type = c("candpref", "ideo3", "ideo2")) {
+
+  if(is.null(data)) data <- cleaned.data
+
+  W2.xvar <- paste("dangerous.disc.W1", type, sep = ".")
+  W2.yvar <- paste("dangerous.disc.prcptn.W2", type, sep = ".")
+  W3.xvar <- paste("dangerous.disc.W2", type, sep = ".")
+  W3.yvar <- paste("dangerous.disc.prcptn.W3", type, sep = ".")
+
+  W2.xvar <- sapply(data[, W2.xvar, with = F], as.numeric)
+  W2.yvar <- sapply(data[, W2.yvar, with = F], as.numeric)
+
+  test2 <- data.frame(KSD = c(W2.xvar, W2.yvar),
+                     group = rep(c("Actual", "Perceived"), each = 341)) %>% setDT
+
+  minmax2 <- minmax(W2.xvar, W2.yvar)
+
+  p2 <- ggplot(test2, aes(x = KSD, group = group, color = group))+
+    stat_ecdf(size = 0.7) + theme_bw() +
+    theme(legend.position = "none") +
+    xlab("Sample") +
+    ylab("Empirial CDF") +
+    #geom_line(size=1) +
+    geom_segment(aes(x = minmax2$x0, y = minmax2$y0, xend = minmax2$x0, yend = minmax2$y1),
+                 linetype = "dashed", color = "red") +
+    geom_point(aes(x = minmax2$x0 , y = minmax2$y0), color ="red", size = 2) +
+    geom_point(aes(x = minmax2$x0 , y = minmax2$y1), color ="red", size = 2) +
+    ggtitle("K-S Test: Actual W1 vs. Perceived W2") +
+    theme(legend.title = element_blank())
+
+  W3.xvar <- sapply(data[, W3.xvar, with = F], as.numeric)
+  W3.yvar <- sapply(data[, W3.yvar, with = F], as.numeric)
+
+  W3.xvar[is.na(W3.xvar)] <- 0
+  W3.yvar[is.na(W3.yvar)] <- 0
+
+  test3 <- data.frame(KSD = c(W3.xvar, W3.yvar),
+                      group = rep(c("Actual", "Perceived"), each = 341)) %>% setDT
+
+  minmax3 <- minmax(W3.xvar, W3.yvar)
+
+  p3 <- ggplot(test3, aes(x = KSD, group = group, color = group))+
+    stat_ecdf(size = 0.7) + theme_bw() +
+    theme(legend.position = "bottom") +
+    xlab("Sample") +
+    ylab("Empirial CDF") +
+    #geom_line(size=1) +
+    geom_segment(aes(x = minmax3$x0, y = minmax3$y0, xend = minmax3$x0, yend = minmax3$y1),
+                 linetype = "dashed", color = "red") +
+    geom_point(aes(x = minmax3$x0 , y = minmax3$y0), color ="red", size = 2) +
+    geom_point(aes(x = minmax3$x0 , y = minmax3$y1), color ="red", size = 2) +
+    ggtitle("K-S Test: Actual W2 vs. Perceived W3") +
+    theme(legend.title = element_blank())
+
+  require(patchwork)
+  ## figure 1 in the ms
+  fig <- p2 + p3 + plot_layout(nrow = 2)
+  print(fig)
+}
 
 
 
 
+## Mediation via MC simulation
+mcmed <- function(model.M, X, model.Y, M, rep = 20000, conf = 95, ...) {
+
+  a <- summary(model.M)$coef[X,1]
+  b <- summary(model.Y)$coef[M,1]
+  pest <- c(a,b)
+  var_a <- (summary(model.M)$coef[X,2])^2
+  var_b <- (summary(model.Y)$coef[M,2])^2
+
+  acov <- matrix(c(var_a, 0, 0, var_b),2,2)
+
+  require(MASS)
+  mcmc <- mvrnorm(rep, pest, acov, empirical=FALSE)
+
+  ab <- mcmc[,1]*mcmc[,2]
+  low <- (1-conf/100)/2
+  upp <- ((1-conf/100)/2)+(conf/100)
+  LL <- quantile(ab,low)
+  UL <- quantile(ab,upp)
+  LL4 <- format(LL,digits=4)
+  UL4 <- format(UL,digits=4)
+
+  ab <- data.frame(indirect = ab)
+  xlab <- paste(conf,'% Monte Carlo Confidence Interval:\n','LL = ',LL4,'  UL = ',UL4)
+  require(ggplot2)
+  plot_ab <- ggplot(ab, aes(x = indirect)) + geom_histogram(...) +
+    theme_bw() + xlab(xlab) + ggtitle("Distribution of Indirect Effect") +
+    geom_vline(xintercept = LL, col = "red", lty = 2) +
+    geom_vline(xintercept = UL, col = "red", lty = 2) +
+
+  cat(paste(conf,'% Confidence Interval ','LL',LL4,'  UL',UL4))
+  print(plot_ab)
+  return(ab)
+
+}
+
+require(texreg)
+extract.brmsfit <- function (model,
+                             use.HDI = TRUE,
+                             level = 0.9,
+                             include.random = TRUE,
+                             include.rsquared = TRUE,
+                             include.nobs = TRUE,
+                             include.loo.ic = TRUE,
+                             reloo = FALSE,
+                             include.waic = TRUE,
+                             ...) {
+  sf <- summary(model, ...)$fixed
+  coefnames <- rownames(sf)
+  coefs <- sf[, 1]
+  se <- sf[, 2]
+  if (isTRUE(use.HDI)) {
+    hdis <- coda::HPDinterval(brms::as.mcmc(model, prob = level, combine_chains = TRUE))
+    hdis <- hdis[seq(1:length(coefnames)), ]
+    ci.low = hdis[, "lower"]
+    ci.up = hdis[, "upper"]
+  } else { # default using 95% posterior quantiles from summary.brmsfit
+    ci.low = sf[, 3]
+    ci.up = sf[, 4]
+  }
+
+  gof <- numeric()
+  gof.names <- character()
+  gof.decimal <- logical()
+  if (isTRUE(include.random) & isFALSE(!nrow(model$ranef))) {
+    sr <- summary(model, ...)$random
+    sd.names <- character()
+    sd.values <- numeric()
+    for (i in 1:length(sr)) {
+      sd <- sr[[i]][, 1]
+      sd.names <- c(sd.names, paste0("SD: ", names(sr)[[i]], names(sd)))
+      sd.values <- c(sd.values, sd)
+    }
+    gof <- c(gof, sd.values)
+    gof.names <- c(gof.names, sd.names)
+    gof.decimal <- c(gof.decimal, rep(TRUE, length(sd.values)))
+  }
+  if (isTRUE(include.rsquared)) {
+    rs <- brms::bayes_R2(model)[1]
+    gof <- c(gof, rs)
+    gof.names <- c(gof.names, "R$^2$")
+    gof.decimal <- c(gof.decimal, TRUE)
+  }
+  if (isTRUE(include.nobs)) {
+    n <- stats::nobs(model)
+    gof <- c(gof, n)
+    gof.names <- c(gof.names, "Num. obs.")
+    gof.decimal <- c(gof.decimal, FALSE)
+  }
+  if (isTRUE(include.loo.ic)) {
+    looic <- brms::loo(model, reloo = reloo)$estimates["looic", "Estimate"]
+    gof <- c(gof, looic)
+    gof.names <- c(gof.names, "loo IC")
+    gof.decimal <- c(gof.decimal, TRUE)
+  }
+  if (isTRUE(include.waic)) {
+    waic <- brms::waic(model)$estimates["waic", "Estimate"]
+    gof <- c(gof, waic)
+    gof.names <- c(gof.names, "WAIC")
+    gof.decimal <- c(gof.decimal, TRUE)
+  }
+
+  tr <- createTexreg(coef.names = coefnames,
+                     coef = coefs,
+                     se = se,
+                     ci.low = ci.low,
+                     ci.up = ci.up,
+                     gof.names = gof.names,
+                     gof = gof,
+                     gof.decimal = gof.decimal)
+  return(tr)
+}
+
+setMethod("extract",
+          signature = className("brmsfit", "brms"),
+          definition = extract.brmsfit)

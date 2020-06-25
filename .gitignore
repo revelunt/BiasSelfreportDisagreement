@@ -9,3 +9,5 @@ Draft/Appendix.pdf
 Draft/*
 Docs/*
 Dat/*
+*.Rdata
+*.xlsx
